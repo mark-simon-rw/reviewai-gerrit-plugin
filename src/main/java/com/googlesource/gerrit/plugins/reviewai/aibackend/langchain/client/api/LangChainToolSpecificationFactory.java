@@ -46,7 +46,7 @@ class LangChainToolSpecificationFactory {
       JsonObject root =
           JsonParser.parseReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
               .getAsJsonObject();
-      JsonObject function = getFunctionDefinition(root);
+      JsonObject function = LangChainToolSchemaUtils.getFunctionDefinition(root);
       if (function == null) {
         log.warn(
             "Tool schema resource {} missing function definition; skipping", schemaResourcePath);
@@ -105,18 +105,6 @@ class LangChainToolSpecificationFactory {
     }
     if (element.isJsonPrimitive()) {
       return element.getAsJsonPrimitive().getAsString();
-    }
-    return null;
-  }
-
-  private static JsonObject getFunctionDefinition(JsonObject root) {
-    JsonObject nestedFunction = root.getAsJsonObject("function");
-    if (nestedFunction != null) {
-      return nestedFunction;
-    }
-    String type = getString(root, "type");
-    if ("function".equals(type)) {
-      return root;
     }
     return null;
   }
