@@ -47,6 +47,9 @@ public class OpenAiTools {
     try (InputStreamReader reader =
         FileUtils.getInputStreamReader(String.format(FILENAME_TOOL_FORMAT, functionName))) {
       tools = jsonToClass(reader, OpenAiTool.class);
+      if (tools.getStrict() == null) {
+        tools.setStrict(false);
+      }
       log.debug("Successfully loaded format replies tool from JSON.");
     } catch (IOException e) {
       throw new RuntimeException("Failed to load data for OpenAI `" + functionName + "` tool", e);

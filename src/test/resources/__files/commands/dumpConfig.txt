@@ -64,7 +64,6 @@ filterCommentsBelowScore: 0
 filterCommentsRelevanceThreshold: 0.6
 filterNegativeComments: true
 filterRelevantComments: true
-forceCreateAssistant: false
 gerritUserName: gpt
 ignoreOutdatedInlineComments: false
 ignoreResolvedAiComments: true

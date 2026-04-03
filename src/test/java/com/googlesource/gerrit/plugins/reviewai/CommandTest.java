@@ -44,8 +44,6 @@ import static org.mockito.Mockito.when;
 
 public class CommandTest extends OpenAiReviewTestBase {
 
-  private static final String AI_ASSISTANT_ID = "asst_TEST_ASSISTANT_ID";
-
   @Before
   public void setUp() {
     setupPluginData();
@@ -64,9 +62,7 @@ public class CommandTest extends OpenAiReviewTestBase {
   protected void setupMockRequests() throws RestApiException {
     super.setupMockRequests();
 
-    // Stub OpenAI assistant creation and run creation to ensure happy-path flow
-    setupMockRequestCreateAssistant(AI_ASSISTANT_ID);
-    setupMockRequestCreateRun(AI_ASSISTANT_ID, OPENAI_RUN_ID);
+    setupMockRequestCreateResponse("openAiResponseRequest.json");
   }
 
   private void setupCommandComment(String command) throws RestApiException {
@@ -97,7 +93,7 @@ public class CommandTest extends OpenAiReviewTestBase {
   public void commandMessage() throws RestApiException {
     String message = "is it OK to use \"and/or\"?";
     setupCommandComment("/message " + message);
-    setupMockRequestRetrieveRunSteps("openAiResponseRequest.json");
+    setupMockRequestCreateResponse("openAiResponseRequest.json");
 
     handleEventBasedOnType(EventHandlerTask.SupportedEvents.COMMENT_ADDED);
 
@@ -113,7 +109,7 @@ public class CommandTest extends OpenAiReviewTestBase {
 
     setupCommandComment("/review");
     String reviewMessage = readTestFile("__files/commands/review.json");
-    setupMockRequestRetrieveRunSteps("openAiResponseRequest.json");
+    setupMockRequestCreateResponse("openAiResponseRequest.json");
 
     handleEventBasedOnType(EventHandlerTask.SupportedEvents.COMMENT_ADDED);
 
@@ -190,7 +186,7 @@ public class CommandTest extends OpenAiReviewTestBase {
   public void commandUnknown() throws Exception {
     String command = "/UNKNOWN";
     setupCommandComment(command);
-    setupMockRequestRetrieveRunSteps("openAiResponseRequest.json");
+    setupMockRequestCreateResponse("openAiResponseRequest.json");
 
     handleEventBasedOnType(EventHandlerTask.SupportedEvents.COMMENT_ADDED);
 

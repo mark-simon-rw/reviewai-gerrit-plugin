@@ -38,23 +38,16 @@ import org.mockito.junit.MockitoJUnitRunner;
 import static com.googlesource.gerrit.plugins.reviewai.listener.EventHandlerTask.SupportedEvents;
 import static com.googlesource.gerrit.plugins.reviewai.settings.Settings.GERRIT_PATCH_SET_FILENAME;
 import static java.net.HttpURLConnection.HTTP_BAD_REQUEST;
-import static java.net.HttpURLConnection.HTTP_OK;
-import static org.mockito.Mockito.when;
 
 @Slf4j
 @RunWith(MockitoJUnitRunner.class)
 public class OpenAiReviewUnifiedTest extends OpenAiReviewTestBase {
-  private static final String OPENAI_ASSISTANT_ID = "asst_TEST_ASSISTANT_ID";
-
   @Rule public TestName testName = new TestName();
 
   @Override
   protected void setupMockRequests() throws RestApiException {
     super.setupMockRequests();
-
-    setupMockRequestCreateAssistant(OPENAI_ASSISTANT_ID);
-    setupMockRequestCreateRun(OPENAI_ASSISTANT_ID, OPENAI_RUN_ID);
-    setupMockRequestRetrieveRunSteps("openAiRunStepsResponse.json");
+    setupMockRequestCreateResponse("openAiRunStepsResponse.json");
   }
 
   @Test
@@ -76,9 +69,20 @@ public class OpenAiReviewUnifiedTest extends OpenAiReviewTestBase {
   }
 
   @Test
-  public void threadCreateResponse400() {
+  public void conversationCreateResponse400() {
+    setupMockRequestCreateConversation(HTTP_BAD_REQUEST);
+
+    handleEventBasedOnType(SupportedEvents.PATCH_SET_CREATED);
+
+    Assert.assertEquals(
+        localizer.getText("message.openai.connection.error"),
+        changeSetData.getReviewSystemMessage());
+  }
+
+  @Test
+  public void responseCreateResponse400() {
     WireMock.stubFor(
-        WireMock.post(WireMock.urlEqualTo(OpenAiUriResourceLocator.threadsUri()))
+        WireMock.post(WireMock.urlEqualTo(OpenAiUriResourceLocator.responsesUri()))
             .willReturn(
                 WireMock.aResponse()
                     .withStatus(HTTP_BAD_REQUEST)
@@ -93,36 +97,16 @@ public class OpenAiReviewUnifiedTest extends OpenAiReviewTestBase {
   }
 
   @Test
-  public void runCreateResponse400() {
-    WireMock.stubFor(
-        WireMock.post(WireMock.urlEqualTo(OpenAiUriResourceLocator.runsUri(OPENAI_THREAD_ID)))
-            .willReturn(
-                WireMock.aResponse()
-                    .withStatus(HTTP_BAD_REQUEST)
-                    .withHeader(
-                        HttpHeaders.CONTENT_TYPE, ContentType.APPLICATION_JSON.toString())));
-    handleEventBasedOnType(SupportedEvents.PATCH_SET_CREATED);
-
-    Assert.assertEquals(
-        localizer.getText("message.openai.connection.error"),
-        changeSetData.getReviewSystemMessage());
-  }
-
-  @Test
-  public void runStepsInitialEmptyResponse() throws Exception {
-    // To effectively test how an initial empty response from OpenAI is managed, the following
-    // approach is adopted:
-    // 1. the OpenAI run-steps request is initially mocked to return an empty data field, and
-    // 2. the sleep function is mocked to replace the empty response with a valid one, instead of
-    // pausing execution
-    setupMockRequestRetrieveRunSteps("openAiRunStepsEmptyResponse.json");
+  public void responsePollFromPending() throws Exception {
+    setupMockRequestCreateResponse("openAiRunStepsEmptyResponse.json");
+    setupMockRequestRetrieveResponse("openAiRunStepsEmptyResponse.json");
 
     try (MockedStatic<ThreadUtils> mocked = Mockito.mockStatic(ThreadUtils.class)) {
       mocked
           .when(() -> ThreadUtils.threadSleep(Mockito.anyLong()))
           .thenAnswer(
               invocation -> {
-                setupMockRequestRetrieveRunSteps("openAiRunStepsResponse.json");
+                setupMockRequestRetrieveResponse("openAiRunStepsResponse.json");
                 return null;
               });
 
@@ -144,11 +128,10 @@ public class OpenAiReviewUnifiedTest extends OpenAiReviewTestBase {
   }
 
   @Test
-  public void runStepsResponse400() {
+  public void responseRetrieve400() {
+    setupMockRequestCreateResponse("openAiRunStepsEmptyResponse.json");
     WireMock.stubFor(
-        WireMock.get(
-                WireMock.urlEqualTo(
-                    OpenAiUriResourceLocator.runStepsUri(OPENAI_THREAD_ID, OPENAI_RUN_ID)))
+        WireMock.get(WireMock.urlEqualTo(OpenAiUriResourceLocator.responseRetrieveUri(OPENAI_RESPONSE_ID)))
             .willReturn(
                 WireMock.aResponse()
                     .withStatus(HTTP_BAD_REQUEST)
@@ -173,17 +156,7 @@ public class OpenAiReviewUnifiedTest extends OpenAiReviewTestBase {
                 config, changeSetData, getGerritChange(), getCodeContextPolicy())
             .getDefaultAiThreadReviewMessage("");
 
-    setupMockRequestRetrieveRunSteps("openAiResponseRequestMessage.json");
-    WireMock.stubFor(
-        WireMock.get(
-                WireMock.urlEqualTo(
-                    OpenAiUriResourceLocator.threadMessageRetrieveUri(
-                        OPENAI_THREAD_ID, OPENAI_MESSAGE_ID)))
-            .willReturn(
-                WireMock.aResponse()
-                    .withStatus(HTTP_OK)
-                    .withHeader(HttpHeaders.CONTENT_TYPE, ContentType.APPLICATION_JSON.toString())
-                    .withBodyFile("openai/openAiResponseThreadMessageText.json")));
+    setupMockRequestCreateResponse("openAiResponseRequestMessage.json");
 
     handleEventBasedOnType(SupportedEvents.PATCH_SET_CREATED);
 
@@ -198,7 +171,7 @@ public class OpenAiReviewUnifiedTest extends OpenAiReviewTestBase {
                 config, changeSetData, getGerritChange(), getCodeContextPolicy())
             .getDefaultAiThreadReviewMessage("");
 
-    setupMockRequestRetrieveRunSteps("openAiRunStepsResponseMalformedJson.json");
+    setupMockRequestCreateResponse("openAiRunStepsResponseMalformedJson.json");
 
     handleEventBasedOnType(SupportedEvents.PATCH_SET_CREATED);
 
@@ -212,7 +185,7 @@ public class OpenAiReviewUnifiedTest extends OpenAiReviewTestBase {
         getReviewMessage(RESOURCE_OPENAI_PATH + "openAiResponseRequest.json", 0);
 
     openAiPrompt.setCommentEvent(true);
-    setupMockRequestRetrieveRunSteps("openAiResponseRequest.json");
+    setupMockRequestCreateResponse("openAiResponseRequest.json");
 
     handleEventBasedOnType(SupportedEvents.COMMENT_ADDED);
 
@@ -228,17 +201,7 @@ public class OpenAiReviewUnifiedTest extends OpenAiReviewTestBase {
         getReviewMessage(RESOURCE_OPENAI_PATH + "openAiResponseRequest.json", 0);
 
     openAiPrompt.setCommentEvent(true);
-    setupMockRequestRetrieveRunSteps("openAiResponseRequestMessage.json");
-    WireMock.stubFor(
-        WireMock.get(
-                WireMock.urlEqualTo(
-                    OpenAiUriResourceLocator.threadMessageRetrieveUri(
-                        OPENAI_THREAD_ID, OPENAI_MESSAGE_ID)))
-            .willReturn(
-                WireMock.aResponse()
-                    .withStatus(HTTP_OK)
-                    .withHeader(HttpHeaders.CONTENT_TYPE, ContentType.APPLICATION_JSON.toString())
-                    .withBodyFile("openai/openAiResponseThreadMessageText.json")));
+    setupMockRequestCreateResponse("openAiResponseRequestMessage.json");
 
     handleEventBasedOnType(SupportedEvents.COMMENT_ADDED);
 
@@ -251,42 +214,34 @@ public class OpenAiReviewUnifiedTest extends OpenAiReviewTestBase {
   @Test
   public void aiMentionedInCommentMessageResponseText400() {
     openAiPrompt.setCommentEvent(true);
-    setupMockRequestRetrieveRunSteps("openAiResponseRequestMessage.json");
+    setupMockRequestCreateResponse("openAiRunStepsEmptyResponse.json");
     WireMock.stubFor(
-        WireMock.get(
-                WireMock.urlEqualTo(
-                    OpenAiUriResourceLocator.threadMessageRetrieveUri(
-                        OPENAI_THREAD_ID, OPENAI_MESSAGE_ID)))
+        WireMock.get(WireMock.urlEqualTo(OpenAiUriResourceLocator.responseRetrieveUri(OPENAI_RESPONSE_ID)))
             .willReturn(
                 WireMock.aResponse()
                     .withStatus(HTTP_BAD_REQUEST)
                     .withHeader(
                         HttpHeaders.CONTENT_TYPE, ContentType.APPLICATION_JSON.toString())));
 
-    handleEventBasedOnType(SupportedEvents.PATCH_SET_CREATED);
+    try (MockedStatic<ThreadUtils> mocked = Mockito.mockStatic(ThreadUtils.class)) {
+      mocked.when(() -> ThreadUtils.threadSleep(Mockito.anyLong())).then(invocation -> null);
 
-    Assert.assertEquals(
-        localizer.getText("message.openai.connection.error"),
-        changeSetData.getReviewSystemMessage());
+      handleEventBasedOnType(SupportedEvents.PATCH_SET_CREATED);
+
+      Assert.assertEquals(
+          localizer.getText("message.openai.connection.error"),
+          changeSetData.getReviewSystemMessage());
+    }
   }
 
   @Test
   public void aiMentionedInCommentMessageResponseJson() throws RestApiException {
     String reviewMessageCommitMessage =
-        getReviewMessage(RESOURCE_OPENAI_PATH + "openAiResponseRequest.json", 0);
+        "The commit message 'Corrected Indentation in Module-Class Retrieval Line' accurately"
+            + " represents the change made in the code.";
 
     openAiPrompt.setCommentEvent(true);
-    setupMockRequestRetrieveRunSteps("openAiResponseRequestMessage.json");
-    WireMock.stubFor(
-        WireMock.get(
-                WireMock.urlEqualTo(
-                    OpenAiUriResourceLocator.threadMessageRetrieveUri(
-                        OPENAI_THREAD_ID, OPENAI_MESSAGE_ID)))
-            .willReturn(
-                WireMock.aResponse()
-                    .withStatus(HTTP_OK)
-                    .withHeader(HttpHeaders.CONTENT_TYPE, ContentType.APPLICATION_JSON.toString())
-                    .withBodyFile("openai/openAiResponseThreadMessageJson.json")));
+    setupMockRequestCreateResponse("openAiResponseThreadMessageJson.json");
 
     handleEventBasedOnType(SupportedEvents.COMMENT_ADDED);
 

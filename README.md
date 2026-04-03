@@ -132,7 +132,7 @@ providers themselves or frameworks that connect to them.
 
 OpenAI Backend uses the **Assistant** resource to maintain a richer interaction context. This backend is designed to:
 
-- Leverage OpenAI Threads to preserve the memory of conversations related to each Change Set.
+- Leverage OpenAI Conversations plus Responses to preserve the memory of interactions related to each Change Set.
 - Link these Threads with OpenAI Assistants that are specialized according to the response needed.
 - Associate the Assistants with the complete Codebase of the Git project related to the Change, which is updated
   each time commits are merged in Gerrit.
@@ -242,12 +242,6 @@ directive = End each reply with \"Hope this helps!\"
 
   **NOTE**: Enabling this feature may result in duplicate requests to AI, potentially increasing the usage costs of the
   AI API.
-- `forceCreateAssistant`: Forces the creation of a new assistant with each request instead of only when configuration
-  settings change or Changes are merged.
-
-  **NOTE**: Enabling this feature may increase AI API usage and should be used for **testing or debugging purposes
-  only**.
-
 ### Optional Parameters Specific to LangChain Backend
 
 - `lcProvider`: Selects the LangChain provider (requires `aiBackend = LANGCHAIN`). Supported providers are `OPENAI`
@@ -396,11 +390,12 @@ The index in the response to `/directives` query can be used to remove single dy
 /directives --reset
 ```
 
-### Forgetting Thread History
+### Forgetting Conversation History
 
-Threads capture all prior interactions and evaluations involving AI within each Change Set. The history stored in these
-threads can be removed with the `/forget_thread` command. This functionality is crucial for preventing AI from merely
-recycling old responses, particularly following modifications to configuration parameters.
+For the OpenAI Responses backend, the plugin stores the OpenAI conversation ID for each Change Set so that forced or
+reiterated reviews continue on the same durable conversation object. This history can be removed with the `/forget_thread` command.
+This functionality is crucial for preventing AI from merely recycling old responses, particularly following
+modifications to configuration parameters.
 
 #### Basic Syntax
 
@@ -441,7 +436,7 @@ INSTRUCTIONS CURRENTLY USED
 
 ### Assistant Instructions
 Act as a PatchSet Reviewer. Disregard missing implementations of methods or other code entities, as the full ...
-RULE #1: You MUST take into account of the messages previously exchanged in the thread for your review. ...
+RULE #1: You MUST take into account of the messages previously exchanged in the conversation for your review. ...
 RULE #2: You MUST only evaluate the code that has been modified in the patch, specifically the lines of the patch ...
 Here are other guidelines for reviewing the patch: A. Identify any potential problems and offer suggestions for ...
 
@@ -473,16 +468,12 @@ DUMP OF LOCAL DATA
 originalLogLevel: INFO
 
 ### Project Scope
-fileId: vs_XXXXXXXXXXXXXXXXXXXX
 
 ### Change Scope
-threadId: thread_XXXXXXXXXXXXXXXXXXXX
+conversationId: conv_XXXXXXXXXXXXXXXXXXXX
 dynamicConfig:
     aiBackend: OPENAI
     enabledVoting: true
-assistantIdLog:
-    2024-08-09 10:28:46.973108457: asst_XXXXXXXXXXXXXXXXXXXXXXXX
-    2024-08-09 10:29:00.460755585: asst_YYYYYYYYYYYYYYYYYYYYYYYY
 ```
 
 #### Showing Configuration Settings
@@ -530,7 +521,6 @@ filterCommentsBelowScore: 0
 filterCommentsRelevanceThreshold: 0.6
 filterNegativeComments: true
 filterRelevantComments: true
-forceCreateAssistant: false
 gerritUserName: gpt
 ignoreOutdatedInlineComments: false
 ignoreResolvedAiComments: true

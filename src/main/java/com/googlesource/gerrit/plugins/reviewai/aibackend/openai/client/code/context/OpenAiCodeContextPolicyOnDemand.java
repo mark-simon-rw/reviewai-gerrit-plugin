@@ -21,22 +21,22 @@ import com.google.inject.Inject;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.api.gerrit.GerritChange;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.api.git.GitRepoFiles;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.code.context.CodeContextPolicyOnDemand;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.openai.OpenAiRunActionHandler;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.api.ai.AiToolCall;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.openai.OpenAiResponseToolOutputHandler;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.openai.OpenAiTools;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.openai.endpoint.OpenAiRun;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai.OpenAiAssistantTools;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai.OpenAiRunResponse;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai.OpenAiResponseInputItem;
 import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
 import com.googlesource.gerrit.plugins.reviewai.errors.exceptions.AiConnectionFailException;
 import com.googlesource.gerrit.plugins.reviewai.interfaces.aibackend.common.client.code.context.ICodeContextPolicy;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.List;
+
 @Slf4j
 public class OpenAiCodeContextPolicyOnDemand extends CodeContextPolicyOnDemand implements ICodeContextPolicy {
   private final GerritChange change;
   private final GitRepoFiles gitRepoFiles;
-
-  private OpenAiRunActionHandler openAiRunActionHandler;
 
   @VisibleForTesting
   @Inject
@@ -48,20 +48,16 @@ public class OpenAiCodeContextPolicyOnDemand extends CodeContextPolicyOnDemand i
     log.debug("OpenAiCodeContextPolicyOnDemand initialized");
   }
 
-  public void setupRunAction(OpenAiRun openAiRun) {
-    openAiRunActionHandler = new OpenAiRunActionHandler(config, change, gitRepoFiles, openAiRun);
-    log.debug("Run Action setup with On-Demand code context policy");
-  }
-
   @Override
-  public boolean runActionRequired(OpenAiRunResponse runResponse)
+  public List<OpenAiResponseInputItem> buildToolResponseItems(List<AiToolCall> aiToolCalls)
       throws AiConnectionFailException {
-    log.debug("Checking Run Action Required with On-Demand code context policy");
-    return openAiRunActionHandler.runActionRequired(runResponse);
+    log.debug("Building tool response items with On-Demand code context policy");
+    return new OpenAiResponseToolOutputHandler(config, change, gitRepoFiles)
+        .buildToolOutputs(aiToolCalls);
   }
 
   @Override
-  public void updateAssistantTools(OpenAiAssistantTools openAiAssistantTools) {
+  public void updateOpenAiTools(OpenAiAssistantTools openAiAssistantTools) {
     OpenAiTools openAiGetContextTools = new OpenAiTools(OpenAiTools.Functions.getContext);
     openAiAssistantTools.getTools().add(openAiGetContextTools.retrieveFunctionTool());
     log.debug(

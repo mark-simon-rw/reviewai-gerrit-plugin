@@ -20,7 +20,7 @@ import com.github.tomakehurst.wiremock.stubbing.Scenario;
 import com.google.gerrit.extensions.api.changes.ReviewInput;
 import com.google.gerrit.extensions.restapi.RestApiException;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.prompt.AiPromptFactory;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai.OpenAiListResponse;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai.OpenAiResponsesResponse;
 import com.googlesource.gerrit.plugins.reviewai.interfaces.aibackend.openai.client.prompt.IAiPrompt;
 import com.googlesource.gerrit.plugins.reviewai.utils.GsonUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -40,11 +40,6 @@ import static org.mockito.Mockito.when;
 @Slf4j
 @RunWith(MockitoJUnitRunner.class)
 public class OpenAiReviewTaskSpecificTest extends OpenAiReviewTestBase {
-  private static final String OPENAI_REVIEW_ASSISTANT_ID = "asst_TEST_REVIEW_ASSISTANT_ID";
-  private static final String OPENAI_COMMIT_MESSAGE_ASSISTANT_ID =
-      "asst_TEST_COMMIT_MESSAGE_ASSISTANT_ID";
-  private static final String OPENAI_REVIEW_RUN_ID = "run_TEST_REVIEW_RUN_ID";
-  private static final String OPENAI_COMMIT_MESSAGE_RUN_ID = "run_TEST_COMMIT_MESSAGE_RUN_ID";
   private static final String SECOND_CALL = "second-call";
 
   public OpenAiReviewTaskSpecificTest() {
@@ -63,26 +58,18 @@ public class OpenAiReviewTaskSpecificTest extends OpenAiReviewTestBase {
   protected void setupMockRequests() throws RestApiException {
     super.setupMockRequests();
 
-    setupMockRequestCreateAssistant(OPENAI_REVIEW_ASSISTANT_ID, Scenario.STARTED, SECOND_CALL);
-    setupMockRequestCreateAssistant(OPENAI_COMMIT_MESSAGE_ASSISTANT_ID, SECOND_CALL);
-    setupMockRequestCreateRun(
-        OPENAI_REVIEW_ASSISTANT_ID, OPENAI_REVIEW_RUN_ID, Scenario.STARTED, SECOND_CALL);
-    setupMockRequestCreateRun(
-        OPENAI_COMMIT_MESSAGE_ASSISTANT_ID, OPENAI_COMMIT_MESSAGE_RUN_ID, SECOND_CALL);
-    setupMockRequestRetrieveRunStepsFromBody(
-        filterOutSubsetRunStepsResponse(1, 2), OPENAI_REVIEW_RUN_ID);
-    setupMockRequestRetrieveRunStepsFromBody(
-        filterOutSubsetRunStepsResponse(0, 1), OPENAI_COMMIT_MESSAGE_RUN_ID);
+    setupMockRequestCreateResponseFromBody(
+        filterOutSubsetResponse(1, 2), Scenario.STARTED, SECOND_CALL);
+    setupMockRequestCreateResponseFromBody(filterOutSubsetResponse(0, 1), SECOND_CALL, null);
   }
 
-  private String filterOutSubsetRunStepsResponse(int from, int to) {
-    OpenAiListResponse runStepsResponse =
+  private String filterOutSubsetResponse(int from, int to) {
+    OpenAiResponsesResponse response =
         GsonUtils.jsonToClass(
             readTestFile(RESOURCE_OPENAI_PATH + "openAiRunStepsResponse.json"),
-            OpenAiListResponse.class);
-    runStepsResponse.getData().get(0).getStepDetails().getToolCalls().subList(from, to).clear();
-
-    return getGson().toJson(runStepsResponse);
+            OpenAiResponsesResponse.class);
+    response.getOutput().subList(from, to).clear();
+    return getGson().toJson(response);
   }
 
   @Test
@@ -101,7 +88,6 @@ public class OpenAiReviewTaskSpecificTest extends OpenAiReviewTestBase {
         openAiPromptOpenAICommitMessage.getDefaultAiThreadReviewMessage(formattedPatchContent);
 
     ArgumentCaptor<ReviewInput> captor = testRequestSent();
-    // Ensure that each of code and commit message reviews are performed only once
     Assert.assertEquals(1, getCapturedComments(captor, "test_file_1.py").size());
     Assert.assertEquals(1, getCapturedComments(captor, GERRIT_PATCH_SET_FILENAME).size());
 

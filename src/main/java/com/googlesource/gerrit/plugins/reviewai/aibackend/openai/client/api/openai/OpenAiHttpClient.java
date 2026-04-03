@@ -18,20 +18,9 @@ package com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.ope
 
 import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.http.HttpClient;
-import okhttp3.Request;
-
-import java.util.Map;
 
 public class OpenAiHttpClient extends HttpClient {
-  private static final Map<String, String> BETA_VERSION_HEADER =
-      Map.of("OpenAI-Beta", "assistants=v2");
-
   public OpenAiHttpClient(Configuration config) {
     super(config);
-  }
-
-  @Override
-  public Request createRequestFromJson(String uri, Object requestObject) {
-    return createRequestFromJson(uri, requestObject, BETA_VERSION_HEADER);
   }
 }

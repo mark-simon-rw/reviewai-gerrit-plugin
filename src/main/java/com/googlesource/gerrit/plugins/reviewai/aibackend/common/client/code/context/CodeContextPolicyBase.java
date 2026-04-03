@@ -16,15 +16,16 @@
 
 package com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.code.context;
 
+import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.api.ai.AiToolCall;
 import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
 import com.googlesource.gerrit.plugins.reviewai.errors.exceptions.AiConnectionFailException;
 import com.googlesource.gerrit.plugins.reviewai.interfaces.aibackend.common.client.code.context.ICodeContextPolicy;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.ClientBase;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.openai.endpoint.OpenAiRun;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai.OpenAiAssistantTools;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai.OpenAiRunResponse;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai.OpenAiResponseInputItem;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.Collections;
 import java.util.List;
 
 @Slf4j
@@ -38,18 +39,14 @@ public abstract class CodeContextPolicyBase extends ClientBase implements ICodeC
     super(config);
   }
 
-  public void setupRunAction(OpenAiRun openAiRun) {
-    log.debug("Setup Run Action skipped with the current code context policy");
-  }
-
-  public boolean runActionRequired(OpenAiRunResponse runResponse)
+  public List<OpenAiResponseInputItem> buildToolResponseItems(List<AiToolCall> aiToolCalls)
       throws AiConnectionFailException {
-    log.debug("Run Action Required checking skipped with the current code context policy");
-    return false;
+    log.debug("Tool response building skipped with the current code context policy");
+    return Collections.emptyList();
   }
 
-  public void updateAssistantTools(OpenAiAssistantTools openAiAssistantTools) {
-    log.debug("Assistant Tools updating skipped with the current code context policy");
+  public void updateOpenAiTools(OpenAiAssistantTools openAiAssistantTools) {
+    log.debug("OpenAI tools updating skipped with the current code context policy");
   }
 
   public void addCodeContextPolicyAwareAssistantInstructions(List<String> instructions) {

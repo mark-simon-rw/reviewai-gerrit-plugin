@@ -17,23 +17,27 @@
 package com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.openai;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.api.ai.AiToolCall;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.prompt.AiPromptFactory;
 import com.google.gson.JsonSyntaxException;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.openai.endpoint.OpenAiResponses;
 import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
 import com.googlesource.gerrit.plugins.reviewai.data.PluginDataHandlerProvider;
 import com.googlesource.gerrit.plugins.reviewai.errors.exceptions.AiConnectionFailException;
 import com.googlesource.gerrit.plugins.reviewai.errors.exceptions.ResponseEmptyRepliesException;
 import com.googlesource.gerrit.plugins.reviewai.interfaces.aibackend.common.client.api.ai.IAiClient;
 import com.googlesource.gerrit.plugins.reviewai.interfaces.aibackend.common.client.code.context.ICodeContextPolicy;
+import com.googlesource.gerrit.plugins.reviewai.interfaces.aibackend.openai.client.prompt.IAiPrompt;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.api.gerrit.GerritChange;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.api.ai.AiResponseContent;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.data.ChangeSetData;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.openai.endpoint.OpenAiThread;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.openai.endpoint.OpenAiThreadMessage;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai.OpenAiThreadMessageResponse;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai.OpenAiResponsesResponse;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.ArrayList;
+import java.util.List;
 import static com.googlesource.gerrit.plugins.reviewai.utils.JsonTextUtils.isJsonObjectAsString;
 import static com.googlesource.gerrit.plugins.reviewai.utils.JsonTextUtils.unwrapJsonCode;
 
@@ -46,14 +50,13 @@ public class OpenAiClient extends OpenAiClientBase implements IAiClient {
     REVIEW_REITERATED
   }
 
-  private static final String TYPE_MESSAGE_CREATION = "message_creation";
-  private static final String TYPE_TOOL_CALLS = "tool_calls";
   private static final int MAX_REITERATION_REQUESTS = 2;
+  private static final String TYPE_FUNCTION_CALL = "function_call";
+  private static final String TYPE_MESSAGE = "message";
+  private static final String FUNCTION_FORMAT_REPLIES = "format_replies";
 
   private final ICodeContextPolicy codeContextPolicy;
   private final PluginDataHandlerProvider pluginDataHandlerProvider;
-
-  private OpenAiRunHandler openAiRunHandler;
 
   @VisibleForTesting
   @Inject
@@ -98,74 +101,53 @@ public class OpenAiClient extends OpenAiClientBase implements IAiClient {
       ChangeSetData changeSetData, GerritChange change, String patchSet)
       throws AiConnectionFailException {
     log.debug("Processing Single OpenAI Request");
-    String threadId = createThreadWithMessage(changeSetData, change, patchSet);
-    runThread(changeSetData, change, threadId);
-    AiResponseContent aiResponseContent = getResponseContentOpenAI(threadId);
-    openAiRunHandler.cancelRun();
+    OpenAiConversation openAiConversation =
+        new OpenAiConversation(config, changeSetData, pluginDataHandlerProvider);
+    OpenAiResponses openAiResponses =
+        new OpenAiResponses(config, changeSetData, change, codeContextPolicy);
+    String conversationId = openAiConversation.resolveConversationId();
+    OpenAiResponsesResponse response =
+        openAiResponses.createPromptResponse(
+            getPrompt(changeSetData, change, patchSet), conversationId);
+    requestBody = openAiResponses.getRequestBody();
+    response = continueResponseLoop(openAiResponses, response, conversationId);
+    AiResponseContent aiResponseContent = getResponseContentOpenAI(response);
     if (!isCommentEvent && aiResponseContent.getReplies() == null) {
       throw new ResponseEmptyRepliesException();
     }
     return aiResponseContent;
   }
 
-  private String createThreadWithMessage(
-      ChangeSetData changeSetData, GerritChange change, String patchSet)
+  private OpenAiResponsesResponse continueResponseLoop(
+      OpenAiResponses openAiResponses, OpenAiResponsesResponse response, String conversationId)
       throws AiConnectionFailException {
-    OpenAiThread openAiThread = new OpenAiThread(config, changeSetData, pluginDataHandlerProvider);
-    String threadId = openAiThread.createThread();
-    log.debug("Created OpenAI thread with ID: {}", threadId);
-
-    OpenAiThreadMessage openAiThreadMessage =
-        new OpenAiThreadMessage(
-            threadId, config, changeSetData, change, codeContextPolicy, patchSet);
-    openAiThreadMessage.addMessage();
-
-    requestBody = openAiThreadMessage.getAddMessageRequestBody(); // Valued for testing purposes
-    log.debug("OpenAI request body: {}", requestBody);
-
-    return threadId;
+    while (hasToolCallsRequiringOutput(response)) {
+      List<OpenAiResponsesResponse.OutputItem> functionCalls = getFunctionCalls(response);
+      response =
+          openAiResponses.createToolResponse(
+              codeContextPolicy.buildToolResponseItems(toAiToolCalls(functionCalls)),
+              conversationId);
+    }
+    return response;
   }
 
-  private void runThread(ChangeSetData changeSetData, GerritChange change, String threadId)
-      throws AiConnectionFailException {
-    openAiRunHandler =
-        new OpenAiRunHandler(
-            threadId, config, changeSetData, change, codeContextPolicy, pluginDataHandlerProvider);
-    openAiRunHandler.setupRun();
-    openAiRunHandler.pollRunStep();
+  private String getPrompt(ChangeSetData changeSetData, GerritChange change, String patchSet) {
+    IAiPrompt openAiPrompt =
+        AiPromptFactory.getAiPrompt(config, changeSetData, change, codeContextPolicy);
+    return openAiPrompt.getDefaultAiThreadReviewMessage(patchSet);
   }
 
-  private AiResponseContent getResponseContentOpenAI(String threadId)
-      throws AiConnectionFailException {
-    return switch (openAiRunHandler.getFirstStepDetails().getType()) {
-      case TYPE_MESSAGE_CREATION -> {
-        log.debug("Retrieving thread message for thread ID: {}", threadId);
-        yield retrieveThreadMessage(threadId);
-      }
-      case TYPE_TOOL_CALLS -> {
-        log.debug("Processing tool calls from OpenAI run.");
-        yield getResponseContent(openAiRunHandler.getFirstStepToolCalls());
-      }
-      default ->
-          throw new IllegalStateException(
-              "Unexpected Step MessageType in OpenAI OpenAI response: " + openAiRunHandler);
-    };
-  }
-
-  private AiResponseContent retrieveThreadMessage(String threadId)
-      throws AiConnectionFailException {
-    OpenAiThreadMessage openAiThreadMessage = new OpenAiThreadMessage(threadId, config);
-    String messageId = openAiRunHandler.getFirstStepDetails().getMessageCreation().getMessageId();
-    log.debug("Retrieving message with ID: {}", messageId);
-
-    OpenAiThreadMessageResponse threadMessageResponse =
-        openAiThreadMessage.retrieveMessage(messageId);
-    String responseText = threadMessageResponse.getContent().get(0).getText().getValue();
-    if (responseText == null) {
-      log.error("OpenAI thread message response content is null for message ID: {}", messageId);
-      throw new RuntimeException("OpenAI thread message response content is null");
+  private AiResponseContent getResponseContentOpenAI(OpenAiResponsesResponse response) {
+    List<OpenAiResponsesResponse.OutputItem> functionCalls = getFormatRepliesCalls(response);
+    if (!functionCalls.isEmpty()) {
+      log.debug("Processing tool calls from OpenAI response.");
+      return getResponseContent(toAiToolCalls(functionCalls));
     }
 
+    String responseText = extractResponseText(response);
+    if (responseText == null) {
+      throw new RuntimeException("OpenAI response content is null");
+    }
     log.debug("Response text received: {}", responseText);
     if (isJsonObjectAsString(responseText)) {
       log.debug("Response text is JSON, extracting content.");
@@ -174,6 +156,80 @@ public class OpenAiClient extends OpenAiClientBase implements IAiClient {
 
     log.debug("Response text is not JSON, returning as is.");
     return new AiResponseContent(responseText);
+  }
+
+  private String extractResponseText(OpenAiResponsesResponse response) {
+    if (response.getOutputText() != null && !response.getOutputText().isEmpty()) {
+      return response.getOutputText();
+    }
+
+    if (response.getOutput() == null) {
+      return null;
+    }
+    for (OpenAiResponsesResponse.OutputItem outputItem : response.getOutput()) {
+      if (!TYPE_MESSAGE.equals(outputItem.getType()) || outputItem.getContent() == null) {
+        continue;
+      }
+      for (OpenAiResponsesResponse.OutputItem.Content content : outputItem.getContent()) {
+        if (content.getText() != null) {
+          return content.getText();
+        }
+      }
+    }
+    return null;
+  }
+
+  private boolean hasToolCallsRequiringOutput(OpenAiResponsesResponse response) {
+    List<OpenAiResponsesResponse.OutputItem> functionCalls = getFunctionCalls(response);
+    return functionCalls.stream().anyMatch(toolCall -> !isFormatReplies(toolCall));
+  }
+
+  private List<OpenAiResponsesResponse.OutputItem> getFunctionCalls(OpenAiResponsesResponse response) {
+    List<OpenAiResponsesResponse.OutputItem> functionCalls = new ArrayList<>();
+    if (response.getOutput() == null) {
+      return functionCalls;
+    }
+    for (OpenAiResponsesResponse.OutputItem outputItem : response.getOutput()) {
+      if (TYPE_FUNCTION_CALL.equals(outputItem.getType())) {
+        functionCalls.add(outputItem);
+      }
+    }
+    return functionCalls;
+  }
+
+  private List<OpenAiResponsesResponse.OutputItem> getFormatRepliesCalls(
+      OpenAiResponsesResponse response) {
+    List<OpenAiResponsesResponse.OutputItem> functionCalls = new ArrayList<>();
+    for (OpenAiResponsesResponse.OutputItem outputItem : getFunctionCalls(response)) {
+      if (isFormatReplies(outputItem)) {
+        functionCalls.add(outputItem);
+      }
+    }
+    return functionCalls;
+  }
+
+  private List<AiToolCall> toAiToolCalls(List<OpenAiResponsesResponse.OutputItem> functionCalls) {
+    List<AiToolCall> aiToolCalls = new ArrayList<>();
+    for (OpenAiResponsesResponse.OutputItem functionCall : functionCalls) {
+      if (functionCall.getName() == null) {
+        continue;
+      }
+      AiToolCall toolCall = new AiToolCall();
+      toolCall.setId(functionCall.getCallId());
+      toolCall.setType("function");
+
+      AiToolCall.Function function = new AiToolCall.Function();
+      function.setName(functionCall.getName());
+      function.setArguments(functionCall.getArguments());
+      toolCall.setFunction(function);
+
+      aiToolCalls.add(toolCall);
+    }
+    return aiToolCalls;
+  }
+
+  private boolean isFormatReplies(OpenAiResponsesResponse.OutputItem functionCall) {
+    return FUNCTION_FORMAT_REPLIES.equals(functionCall.getName());
   }
 
   private AiResponseContent extractResponseContent(String responseText) {

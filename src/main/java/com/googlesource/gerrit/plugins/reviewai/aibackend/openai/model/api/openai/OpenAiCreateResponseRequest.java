@@ -16,12 +16,18 @@
 
 package com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai;
 
+import lombok.Builder;
 import lombok.Data;
 
 import java.util.List;
 
 @Data
-public class OpenAiListResponse {
-  private String object;
-  private List<OpenAiRunStepsResponse> data;
+@Builder
+public class OpenAiCreateResponseRequest {
+  private String model;
+  private String instructions;
+  private Object input;
+  private Double temperature;
+  private List<OpenAiTool> tools;
+  private String conversation;
 }

@@ -27,14 +27,12 @@ import com.googlesource.gerrit.plugins.reviewai.localization.Localizer;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.api.gerrit.GerritChange;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.messages.debug.DebugCodeBlocksDirectives;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.data.ChangeSetData;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.openai.OpenAiAssistantHandler;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.openai.OpenAiConversation;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.api.git.GitRepoFiles;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
 import java.util.Set;
-
-import static com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.openai.endpoint.OpenAiThread.KEY_THREAD_ID;
 
 @Slf4j
 public class ClientCommandExecutor extends ClientCommandBase {
@@ -123,8 +121,10 @@ public class ClientCommandExecutor extends ClientCommandBase {
 
   private void commandForgetThread() {
     PluginDataHandler changeDataHandler = pluginDataHandlerProvider.getChangeScope();
-    log.info("Removing thread ID '{}' for Change Set", changeDataHandler.getValue(KEY_THREAD_ID));
-    changeDataHandler.removeValue(KEY_THREAD_ID);
+    log.info(
+        "Removing conversation ID '{}' for Change Set",
+        changeDataHandler.getValue(OpenAiConversation.KEY_CONVERSATION_ID));
+    changeDataHandler.removeValue(OpenAiConversation.KEY_CONVERSATION_ID);
     changeSetData.setReviewSystemMessage(localizer.getText("message.command.thread.forget"));
   }
 

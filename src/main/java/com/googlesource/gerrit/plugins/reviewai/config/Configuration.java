@@ -82,7 +82,6 @@ public class Configuration extends ConfigCore {
   private static final boolean DEFAULT_PATCH_SET_COMMENTS_AS_RESOLVED = false;
   private static final boolean DEFAULT_IGNORE_OUTDATED_INLINE_COMMENTS = false;
   private static final boolean DEFAULT_IGNORE_RESOLVED_AI_COMMENTS = true;
-  private static final boolean DEFAULT_FORCE_CREATE_ASSISTANT = false;
   private static final boolean DEFAULT_TASK_SPECIFIC_ASSISTANTS = false;
   private static final int DEFAULT_AI_CONNECTION_TIMEOUT = 30;
   private static final int DEFAULT_AI_CONNECTION_RETRY_INTERVAL = 10;
@@ -141,7 +140,6 @@ public class Configuration extends ConfigCore {
   private static final String KEY_PATCH_SET_COMMENTS_AS_RESOLVED = "patchSetCommentsAsResolved";
   private static final String KEY_IGNORE_OUTDATED_INLINE_COMMENTS = "ignoreOutdatedInlineComments";
   private static final String KEY_IGNORE_RESOLVED_AI_COMMENTS = "ignoreResolvedAiComments";
-  private static final String KEY_FORCE_CREATE_ASSISTANT = "forceCreateAssistant";
   private static final String KEY_TASK_SPECIFIC_ASSISTANTS = "taskSpecificAssistants";
   private static final String KEY_AI_CONNECTION_TIMEOUT = "aiConnectionTimeout";
   private static final String KEY_AI_CONNECTION_RETRY_INTERVAL = "aiConnectionRetryInterval";
@@ -339,10 +337,6 @@ public class Configuration extends ConfigCore {
 
   public boolean getIgnoreResolvedAiComments() {
     return getBoolean(KEY_IGNORE_RESOLVED_AI_COMMENTS, DEFAULT_IGNORE_RESOLVED_AI_COMMENTS);
-  }
-
-  public boolean getForceCreateAssistant() {
-    return getBoolean(KEY_FORCE_CREATE_ASSISTANT, DEFAULT_FORCE_CREATE_ASSISTANT);
   }
 
   public boolean getTaskSpecificAssistants() {

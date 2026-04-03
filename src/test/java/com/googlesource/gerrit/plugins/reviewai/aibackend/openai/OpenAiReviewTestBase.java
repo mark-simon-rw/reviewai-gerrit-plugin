@@ -29,7 +29,7 @@ import com.googlesource.gerrit.plugins.reviewai.ReviewTestBase;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.prompt.AiPromptFactory;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.api.ai.AiResponseContent;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.OpenAiUriResourceLocator;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai.OpenAiListResponse;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai.OpenAiResponsesResponse;
 import com.googlesource.gerrit.plugins.reviewai.data.PluginDataHandler;
 import com.googlesource.gerrit.plugins.reviewai.data.PluginDataHandlerProvider;
 import com.googlesource.gerrit.plugins.reviewai.interfaces.aibackend.openai.client.prompt.IAiPrompt;
@@ -40,12 +40,8 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.io.ByteArrayInputStream;
-import java.util.Collections;
 import java.util.List;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.equalToJson;
-import static com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.openai.OpenAiPoller.COMPLETED_STATUS;
-import static com.googlesource.gerrit.plugins.reviewai.utils.GsonUtils.getGson;
 import static com.googlesource.gerrit.plugins.reviewai.utils.GsonUtils.jsonToClass;
 import static java.net.HttpURLConnection.HTTP_OK;
 import static org.mockito.ArgumentMatchers.any;
@@ -54,9 +50,8 @@ import static org.mockito.Mockito.when;
 
 @Slf4j
 public class OpenAiReviewTestBase extends ReviewTestBase {
-  protected static final String OPENAI_THREAD_ID = "thread_TEST_THREAD_ID";
-  protected static final String OPENAI_MESSAGE_ID = "msg_TEST_MESSAGE_ID";
-  protected static final String OPENAI_RUN_ID = "run_TEST_RUN_ID";
+  protected static final String OPENAI_CONVERSATION_ID = "conv_TEST_CONVERSATION_ID";
+  protected static final String OPENAI_RESPONSE_ID = "resp_TEST_RESPONSE_ID";
   protected static final String RESOURCE_OPENAI_PATH = "__files/openai/";
 
   protected String formattedPatchContent;
@@ -75,16 +70,15 @@ public class OpenAiReviewTestBase extends ReviewTestBase {
     PluginDataHandlerProvider provider =
         new PluginDataHandlerProvider(mockPluginDataPath, getGerritChange());
     projectHandler = provider.getProjectScope();
-    // Mock the pluginDataHandlerProvider to return the mocked project pluginDataHandler
     Mockito.lenient().when(pluginDataHandlerProvider.getProjectScope()).thenReturn(projectHandler);
-    // Mock the pluginDataHandlerProvider to return the mocked assistant pluginDataHandler
-    when(pluginDataHandlerProvider.getAssistantsWorkspace()).thenReturn(projectHandler);
+    Mockito.lenient()
+        .when(pluginDataHandlerProvider.getAssistantsWorkspace())
+        .thenReturn(projectHandler);
   }
 
   protected void initTest() {
     super.initTest();
 
-    // Load the prompts
     openAiPrompt =
         AiPromptFactory.getAiPrompt(
             config, changeSetData, getGerritChange(), getCodeContextPolicy());
@@ -93,30 +87,19 @@ public class OpenAiReviewTestBase extends ReviewTestBase {
   protected void setupMockRequests() throws RestApiException {
     super.setupMockRequests();
 
-    // Mock the behavior of the Git Repository Manager
     String repoJson = readTestFile(RESOURCE_OPENAI_PATH + "gitProjectFiles.json");
-    Mockito.lenient().when(gitRepoFiles.getGitRepoFilesAsJson(any(), any())).thenReturn(List.of(repoJson));
+    Mockito.lenient()
+        .when(gitRepoFiles.getGitRepoFilesAsJson(any(), any()))
+        .thenReturn(List.of(repoJson));
 
-    // Mock the behavior of the OpenAI create-thread request
     WireMock.stubFor(
-        WireMock.post(WireMock.urlEqualTo(OpenAiUriResourceLocator.threadsUri()))
+        WireMock.post(WireMock.urlEqualTo(OpenAiUriResourceLocator.conversationsUri()))
             .willReturn(
                 WireMock.aResponse()
                     .withStatus(HTTP_OK)
                     .withHeader(HttpHeaders.CONTENT_TYPE, ContentType.APPLICATION_JSON.toString())
-                    .withBody("{\"id\": " + OPENAI_THREAD_ID + "}")));
+                    .withBody("{\"id\": \"" + OPENAI_CONVERSATION_ID + "\"}")));
 
-    // Mock the behavior of the OpenAI add-message-to-thread request
-    WireMock.stubFor(
-        WireMock.post(
-                WireMock.urlEqualTo(OpenAiUriResourceLocator.threadMessagesUri(OPENAI_THREAD_ID)))
-            .willReturn(
-                WireMock.aResponse()
-                    .withStatus(HTTP_OK)
-                    .withHeader(HttpHeaders.CONTENT_TYPE, ContentType.APPLICATION_JSON.toString())
-                    .withBody("{\"id\": " + OPENAI_MESSAGE_ID + "}")));
-
-    // Mock the behavior of the formatted patch request
     formattedPatchContent = readTestFile(RESOURCE_OPENAI_PATH + "gerritFormattedPatch.txt");
     ByteArrayInputStream inputStream = new ByteArrayInputStream(formattedPatchContent.getBytes());
     BinaryResult binaryResult =
@@ -135,32 +118,20 @@ public class OpenAiReviewTestBase extends ReviewTestBase {
 
   protected void initComparisonContent() {
     super.initComparisonContent();
-
     promptTagComments = readTestFile(RESOURCE_OPENAI_PATH + "openAiPromptTagRequests.json");
   }
 
   protected ArgumentCaptor<ReviewInput> testRequestSent() throws RestApiException {
     ArgumentCaptor<ReviewInput> reviewInputCaptor = super.testRequestSent();
-    requestContent = aiRequestBody.getAsJsonObject().get("content").getAsString();
+    requestContent = aiRequestBody.getAsJsonObject().get("input").getAsString();
     return reviewInputCaptor;
   }
 
-  protected String getReviewMessage(String responseFile, int tollCallId) {
-    OpenAiListResponse responseContent =
-        jsonToClass(readTestFile(responseFile), OpenAiListResponse.class);
-    String reviewJsonResponse =
-        responseContent
-            .getData()
-            .get(0)
-            .getStepDetails()
-            .getToolCalls()
-            .get(tollCallId)
-            .getFunction()
-            .getArguments();
-    return jsonToClass(reviewJsonResponse, AiResponseContent.class)
-        .getReplies()
-        .get(0)
-        .getReply();
+  protected String getReviewMessage(String responseFile, int toolCallId) {
+    OpenAiResponsesResponse responseContent =
+        jsonToClass(readTestFile(responseFile), OpenAiResponsesResponse.class);
+    String reviewJsonResponse = responseContent.getOutput().get(toolCallId).getArguments();
+    return jsonToClass(reviewJsonResponse, AiResponseContent.class).getReplies().get(0).getReply();
   }
 
   protected List<ReviewInput.CommentInput> getCapturedComments(
@@ -172,60 +143,14 @@ public class OpenAiReviewTestBase extends ReviewTestBase {
     return getCapturedComments(captor, filename).get(0).message;
   }
 
-  protected void setupMockRequestCreateAssistant(
-      String assistantId, String fromState, String toState) {
-    // Mock the behavior of the OpenAI create-assistant request
+  protected void setupMockRequestCreateResponseFromBody(
+      String body, String fromState, String toState) {
     WireMock.stubFor(
         getScenarioMapping(
-                OpenAiUriResourceLocator.assistantCreateUri(),
-                "Assistant Scenario",
+                OpenAiUriResourceLocator.responsesUri(),
+                "Create-Response Scenario",
                 fromState,
                 toState)
-            .willReturn(
-                WireMock.aResponse()
-                    .withStatus(HTTP_OK)
-                    .withHeader(HttpHeaders.CONTENT_TYPE, ContentType.APPLICATION_JSON.toString())
-                    .withBody("{\"id\": " + assistantId + "}")));
-  }
-
-  protected void setupMockRequestCreateAssistant(String assistantId, String fromState) {
-    setupMockRequestCreateAssistant(assistantId, fromState, null);
-  }
-
-  protected void setupMockRequestCreateAssistant(String assistantId) {
-    setupMockRequestCreateAssistant(assistantId, null, null);
-  }
-
-  protected void setupMockRequestCreateRun(
-      String assistantId, String runId, String fromState, String toState) {
-    // Mock the behavior of the OpenAI create-run request
-    WireMock.stubFor(
-        getScenarioMapping(
-                OpenAiUriResourceLocator.runsUri(OPENAI_THREAD_ID),
-                "Create-Run Scenario",
-                fromState,
-                toState)
-            .withRequestBody(equalToJson(getJsonAssistantId(assistantId), true, true))
-            .willReturn(
-                WireMock.aResponse()
-                    .withStatus(HTTP_OK)
-                    .withHeader(HttpHeaders.CONTENT_TYPE, ContentType.APPLICATION_JSON.toString())
-                    .withBody("{\"id\": " + runId + ", \"status\": " + COMPLETED_STATUS + "}")));
-  }
-
-  protected void setupMockRequestCreateRun(String assistantId, String runId, String fromState) {
-    setupMockRequestCreateRun(assistantId, runId, fromState, null);
-  }
-
-  protected void setupMockRequestCreateRun(String assistantId, String runId) {
-    setupMockRequestCreateRun(assistantId, runId, null, null);
-  }
-
-  protected void setupMockRequestRetrieveRunStepsFromBody(String body, String runId) {
-    // Mock the behavior of the OpenAI retrieve-run-steps request
-    WireMock.stubFor(
-        WireMock.get(
-                WireMock.urlEqualTo(OpenAiUriResourceLocator.runStepsUri(OPENAI_THREAD_ID, runId)))
             .willReturn(
                 WireMock.aResponse()
                     .withStatus(HTTP_OK)
@@ -233,15 +158,47 @@ public class OpenAiReviewTestBase extends ReviewTestBase {
                     .withBody(body)));
   }
 
-  protected void setupMockRequestRetrieveRunSteps(String bodyFile, String runId) {
-    setupMockRequestRetrieveRunStepsFromBody(readTestFile(RESOURCE_OPENAI_PATH + bodyFile), runId);
+  protected void setupMockRequestCreateConversation(int statusCode) {
+    WireMock.stubFor(
+        WireMock.post(WireMock.urlEqualTo(OpenAiUriResourceLocator.conversationsUri()))
+            .willReturn(
+                WireMock.aResponse()
+                    .withStatus(statusCode)
+                    .withHeader(HttpHeaders.CONTENT_TYPE, ContentType.APPLICATION_JSON.toString())));
   }
 
-  protected void setupMockRequestRetrieveRunSteps(String bodyFile) {
-    setupMockRequestRetrieveRunSteps(bodyFile, OPENAI_RUN_ID);
+  protected void setupMockRequestCreateResponse(String bodyFile, String fromState, String toState) {
+    setupMockRequestCreateResponseFromBody(
+        readTestFile(RESOURCE_OPENAI_PATH + bodyFile), fromState, toState);
   }
 
-  private MappingBuilder getScenarioMapping(
+  protected void setupMockRequestCreateResponse(String bodyFile, String fromState) {
+    setupMockRequestCreateResponse(bodyFile, fromState, null);
+  }
+
+  protected void setupMockRequestCreateResponse(String bodyFile) {
+    setupMockRequestCreateResponse(bodyFile, null, null);
+  }
+
+  protected void setupMockRequestRetrieveResponseFromBody(String body, String responseId) {
+    WireMock.stubFor(
+        WireMock.get(WireMock.urlEqualTo(OpenAiUriResourceLocator.responseRetrieveUri(responseId)))
+            .willReturn(
+                WireMock.aResponse()
+                    .withStatus(HTTP_OK)
+                    .withHeader(HttpHeaders.CONTENT_TYPE, ContentType.APPLICATION_JSON.toString())
+                    .withBody(body)));
+  }
+
+  protected void setupMockRequestRetrieveResponse(String bodyFile, String responseId) {
+    setupMockRequestRetrieveResponseFromBody(readTestFile(RESOURCE_OPENAI_PATH + bodyFile), responseId);
+  }
+
+  protected void setupMockRequestRetrieveResponse(String bodyFile) {
+    setupMockRequestRetrieveResponse(bodyFile, OPENAI_RESPONSE_ID);
+  }
+
+  protected MappingBuilder getScenarioMapping(
       String resourceURI, String scenario, String fromState, String toState) {
     MappingBuilder mappingBuilder = WireMock.post(WireMock.urlEqualTo(resourceURI));
     if (fromState != null) {
@@ -254,13 +211,9 @@ public class OpenAiReviewTestBase extends ReviewTestBase {
     return mappingBuilder;
   }
 
-  private String getJsonAssistantId(String assistantId) {
-    return getGson().toJson(Collections.singletonMap("assistant_id", assistantId));
-  }
-
   protected String getUserPrompt() {
     JsonArray prompts =
-        readContentToType(aiRequestBody.get("content").getAsString(), JsonArray.class);
+        readContentToType(aiRequestBody.get("input").getAsString(), JsonArray.class);
     return prompts.get(0).getAsJsonObject().get("request").getAsString();
   }
 }

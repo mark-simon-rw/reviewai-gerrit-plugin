@@ -18,52 +18,52 @@ package com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.ope
 
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.api.ai.AiClientBase;
 import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
-import com.googlesource.gerrit.plugins.reviewai.errors.exceptions.AiConnectionFailException;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.api.gerrit.GerritChange;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.code.context.ondemand.GetContextContent;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.api.ai.AiToolCall;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.openai.endpoint.OpenAiRun;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.api.git.GitRepoFiles;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.code.context.ondemand.CodeContextBuilder;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai.OpenAiToolOutput;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.api.ai.AiToolCall;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.code.context.ondemand.GetContextContent;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai.OpenAiResponseInputItem;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
-public class OpenAiRunToolOutputHandler extends AiClientBase {
+public class OpenAiResponseToolOutputHandler extends AiClientBase {
   // OpenAI may occasionally return the fixed string "multi_tool_use" as the function name when
   // multiple tools are utilized.
   private static final List<String> ON_DEMAND_FUNCTION_NAMES =
       List.of("get_context", "multi_tool_use");
 
-  private final OpenAiRun openAiRun;
   private final CodeContextBuilder codeContextBuilder;
 
   private List<AiToolCall> aiToolCalls;
 
-  public OpenAiRunToolOutputHandler(
-      Configuration config, GerritChange change, GitRepoFiles gitRepoFiles, OpenAiRun openAiRun) {
+  public OpenAiResponseToolOutputHandler(
+      Configuration config, GerritChange change, GitRepoFiles gitRepoFiles) {
     super(config);
-    this.openAiRun = openAiRun;
     codeContextBuilder = new CodeContextBuilder(config, change, gitRepoFiles);
   }
 
-  public void submitToolOutput(List<AiToolCall> aiToolCalls)
-      throws AiConnectionFailException {
+  public List<OpenAiResponseInputItem> buildToolOutputs(List<AiToolCall> aiToolCalls) {
     this.aiToolCalls = aiToolCalls;
-    List<OpenAiToolOutput> toolOutputs = new ArrayList<>();
+    List<OpenAiResponseInputItem> toolOutputs = new ArrayList<>();
     log.debug("OpenAI Tool Calls: {}", aiToolCalls);
     for (int i = 0; i < aiToolCalls.size(); i++) {
+      String output = getOutput(i);
+      if (output.isEmpty()) {
+        continue;
+      }
       toolOutputs.add(
-          OpenAiToolOutput.builder()
-              .toolCallId(aiToolCalls.get(i).getId())
-              .output(getOutput(i))
+          OpenAiResponseInputItem.builder()
+              .type("function_call_output")
+              .callId(aiToolCalls.get(i).getId())
+              .output(output)
               .build());
     }
     log.debug("OpenAI Tool Outputs: {}", toolOutputs);
-    openAiRun.submitToolOutputs(toolOutputs);
+    return toolOutputs;
   }
 
   private String getOutput(int i) {

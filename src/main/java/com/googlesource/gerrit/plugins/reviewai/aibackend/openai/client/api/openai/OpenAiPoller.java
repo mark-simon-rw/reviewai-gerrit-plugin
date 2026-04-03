@@ -18,7 +18,7 @@ package com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.ope
 
 import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
 import com.googlesource.gerrit.plugins.reviewai.errors.exceptions.AiConnectionFailException;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai.OpenAiRunResponse;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai.OpenAiResponse;
 import com.googlesource.gerrit.plugins.reviewai.utils.TimeUtils;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -54,7 +54,7 @@ public class OpenAiPoller extends OpenAiApiBase {
     pollingCount = 0;
   }
 
-  public OpenAiRunResponse runPoll(String uri, OpenAiRunResponse pollResponse)
+  public <T extends OpenAiResponse> T runPoll(String uri, T pollResponse, Class<T> clazz)
       throws AiConnectionFailException {
     long startTime = TimeUtils.getCurrentMillis();
 
@@ -64,7 +64,7 @@ public class OpenAiPoller extends OpenAiApiBase {
       threadSleep(pollingInterval);
       Request pollRequest = httpClient.createRequestFromJson(uri, null);
       log.debug("OpenAI Poll request: {}", pollRequest);
-      pollResponse = getOpenAiResponse(pollRequest);
+      pollResponse = getOpenAiResponse(pollRequest, clazz);
       log.debug("OpenAI Poll response: {}", pollResponse);
       elapsedTime = (double) (TimeUtils.getCurrentMillis() - startTime) / 1000;
       if (elapsedTime >= pollingTimeout) {
@@ -77,10 +77,6 @@ public class OpenAiPoller extends OpenAiApiBase {
 
   public static boolean isNotCompleted(String status) {
     return status == null || !status.equals(COMPLETED_STATUS);
-  }
-
-  public static boolean isActionRequired(String status) {
-    return status != null && status.equals(REQUIRES_ACTION_STATUS);
   }
 
   private static boolean isPending(String status) {

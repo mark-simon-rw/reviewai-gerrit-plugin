@@ -17,14 +17,38 @@
 package com.googlesource.gerrit.plugins.reviewai.aibackend.openai.model.api.openai;
 
 import com.google.gson.annotations.SerializedName;
-import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 import java.util.List;
 
+@EqualsAndHashCode(callSuper = true)
 @Data
-@Builder
-public class OpenAiSubmitToolOutputsToRunRequest {
-  @SerializedName("tool_outputs")
-  private List<OpenAiToolOutput> toolOutputs;
+@ToString(callSuper = true)
+public class OpenAiResponsesResponse extends OpenAiResponse {
+  @SerializedName("output_text")
+  private String outputText;
+
+  private List<OutputItem> output;
+
+  @Data
+  public static class OutputItem {
+    private String id;
+    private String type;
+    private String role;
+    private String name;
+    private String arguments;
+
+    @SerializedName("call_id")
+    private String callId;
+
+    private List<Content> content;
+
+    @Data
+    public static class Content {
+      private String type;
+      private String text;
+    }
+  }
 }

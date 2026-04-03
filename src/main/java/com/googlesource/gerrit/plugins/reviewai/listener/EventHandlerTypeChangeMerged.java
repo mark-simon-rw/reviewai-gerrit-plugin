@@ -22,7 +22,7 @@ import com.googlesource.gerrit.plugins.reviewai.interfaces.listener.IEventHandle
 import com.googlesource.gerrit.plugins.reviewai.interfaces.aibackend.common.client.code.context.ICodeContextPolicy;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.api.gerrit.GerritChange;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.data.ChangeSetData;
-import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.openai.OpenAiAssistantHandler;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.openai.OpenAiConversation;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -57,10 +57,7 @@ public class EventHandlerTypeChangeMerged implements IEventHandlerType {
   @Override
   public void processEvent() {
     log.debug("Starting processing event for change merged: {}", change.getFullChangeId());
-    OpenAiAssistantHandler openAiAssistantHandler =
-        new OpenAiAssistantHandler(
-            config, changeSetData, change, codeContextPolicy, pluginDataHandlerProvider);
-    openAiAssistantHandler.flushAssistantIds();
-    log.debug("Flushed assistant IDs for change merged: {}", change.getFullChangeId());
+    new OpenAiConversation(config, changeSetData, pluginDataHandlerProvider).clear();
+    log.debug("Cleared OpenAI conversation state for change merged: {}", change.getFullChangeId());
   }
 }

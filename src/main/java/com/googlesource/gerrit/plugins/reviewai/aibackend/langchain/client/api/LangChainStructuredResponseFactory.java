@@ -50,10 +50,10 @@ class LangChainStructuredResponseFactory {
       JsonObject root =
           JsonParser.parseReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
               .getAsJsonObject();
-      JsonObject function = root.getAsJsonObject("function");
+      JsonObject function = getFunctionDefinition(root);
       if (function == null) {
         log.warn(
-            "Structured output schema resource {} missing 'function' definition; ignoring",
+            "Structured output schema resource {} missing function definition; ignoring",
             schemaResourcePath);
         return null;
       }
@@ -108,5 +108,19 @@ class LangChainStructuredResponseFactory {
           e);
       return null;
     }
+  }
+
+  private static JsonObject getFunctionDefinition(JsonObject root) {
+    JsonObject nestedFunction = root.getAsJsonObject("function");
+    if (nestedFunction != null) {
+      return nestedFunction;
+    }
+    JsonElement typeElement = root.get("type");
+    if (typeElement != null
+        && typeElement.isJsonPrimitive()
+        && "function".equals(typeElement.getAsString())) {
+      return root;
+    }
+    return null;
   }
 }
