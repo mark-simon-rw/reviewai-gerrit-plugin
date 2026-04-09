@@ -16,10 +16,14 @@
 
 package com.googlesource.gerrit.plugins.reviewai;
 
+import com.google.gerrit.extensions.restapi.RestApiModule;
+import com.google.gerrit.server.change.ChangeResource;
 import com.google.gerrit.server.events.EventListener;
 import com.google.inject.AbstractModule;
 import com.google.inject.multibindings.Multibinder;
 import com.googlesource.gerrit.plugins.reviewai.listener.GerritListener;
+import com.googlesource.gerrit.plugins.reviewai.web.AiReviewHistory;
+import com.googlesource.gerrit.plugins.reviewai.web.AiReviewMessage;
 
 public class Module extends AbstractModule {
   @Override
@@ -27,5 +31,14 @@ public class Module extends AbstractModule {
     Multibinder<EventListener> eventListenerBinder =
         Multibinder.newSetBinder(binder(), EventListener.class);
     eventListenerBinder.addBinding().to(GerritListener.class);
+
+    install(
+        new RestApiModule() {
+          @Override
+          protected void configure() {
+            get(ChangeResource.CHANGE_KIND, "ai-review-history").to(AiReviewHistory.class);
+            post(ChangeResource.CHANGE_KIND, "ai-review-message").to(AiReviewMessage.class);
+          }
+        });
   }
 }

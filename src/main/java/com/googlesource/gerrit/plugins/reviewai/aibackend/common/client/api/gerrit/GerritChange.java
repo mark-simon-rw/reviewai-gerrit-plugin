@@ -51,7 +51,7 @@ public class GerritChange {
    * Works with both older (class) and newer (interface) Project.NameKey implementations.
    */
   public GerritChange(Object projectNameKey, BranchNameKey branchNameKey, Change.Key changeKey) {
-    this.projectName = extractProjectName(projectNameKey);
+    this.projectName = getProjectName(projectNameKey);
     this.branchNameKey = branchNameKey;
     this.changeKey = changeKey;
     buildFullChangeId();
@@ -88,7 +88,7 @@ public class GerritChange {
    */
   public Project.NameKey getProjectNameKey() {
     if (projectName == null && patchSetEvent != null) {
-      projectName = extractProjectName(patchSetEvent.getProjectNameKey());
+      projectName = getProjectName(patchSetEvent.getProjectNameKey());
     }
     return Project.nameKey(projectName);
   }
@@ -102,7 +102,7 @@ public class GerritChange {
             changeKey.get());
   }
 
-  private static String extractProjectName(Object projectNameKey) {
+  public static String getProjectName(Object projectNameKey) {
     if (projectNameKey == null) {
       return null;
     }

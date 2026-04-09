@@ -31,6 +31,7 @@
                         <manifestEntries>
                             <Gerrit-PluginName>reviewai-gerrit-plugin</Gerrit-PluginName>
                             <Gerrit-Module>com.googlesource.gerrit.plugins.reviewai.Module</Gerrit-Module>
+                            <Gerrit-HttpModule>com.googlesource.gerrit.plugins.reviewai.HttpModule</Gerrit-HttpModule>
 
                             <Implementation-Vendor>Amarula</Implementation-Vendor>
                             <Implementation-URL>
@@ -120,6 +121,7 @@
                                     <manifestEntries>
                                         <Gerrit-PluginName>reviewai-gerrit-plugin</Gerrit-PluginName>
                                         <Gerrit-Module>com.googlesource.gerrit.plugins.reviewai.Module</Gerrit-Module>
+                                        <Gerrit-HttpModule>com.googlesource.gerrit.plugins.reviewai.HttpModule</Gerrit-HttpModule>
                                         <Implementation-Vendor>Amarula</Implementation-Vendor>
                                         <Implementation-URL>
                                             https://github.com/amarula/reviewai-gerrit-plugin

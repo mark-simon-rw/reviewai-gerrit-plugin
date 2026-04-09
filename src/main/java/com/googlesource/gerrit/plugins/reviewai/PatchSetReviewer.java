@@ -106,17 +106,12 @@ public class PatchSetReviewer {
   private void setCommentBatchMap(ReviewBatch batchMap, Integer batchID) {
     if (commentProperties != null && batchID < commentProperties.size()) {
       GerritComment commentProperty = commentProperties.get(batchID);
-      if (commentProperty != null
-          && (commentProperty.getLine() != null || commentProperty.getRange() != null)) {
-        String id = commentProperty.getId();
-        String filename = commentProperty.getFilename();
-        Integer line = commentProperty.getLine();
-        GerritCodeRange range = commentProperty.getRange();
-        if (range != null) {
-          batchMap.setId(id);
-          batchMap.setFilename(filename);
-          batchMap.setLine(line);
-          batchMap.setRange(range);
+      if (commentProperty != null) {
+        batchMap.setId(commentProperty.getId());
+        batchMap.setFilename(commentProperty.getFilename());
+        batchMap.setLine(commentProperty.getLine());
+        if (commentProperty.getRange() != null) {
+          batchMap.setRange(commentProperty.getRange());
         }
       }
     }
