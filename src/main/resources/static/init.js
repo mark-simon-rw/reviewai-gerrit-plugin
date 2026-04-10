@@ -23,6 +23,10 @@ Gerrit.install(plugin => {
       this._awaitingResponse = false;
       this._pendingPrompt = null;
       this._lastPollMs = 0;
+      this._container = null;
+      this._content = null;
+      this._composerInput = null;
+      this._composerButton = null;
     }
 
     connectedCallback() {
@@ -174,13 +178,12 @@ Gerrit.install(plugin => {
     }
 
     _render() {
-      this.replaceChildren();
+      if (!this._container) {
+        const container = document.createElement('div');
+        container.className = 'reviewai-history';
 
-      const container = document.createElement('div');
-      container.className = 'reviewai-history';
-
-      const style = document.createElement('style');
-      style.textContent = `
+        const style = document.createElement('style');
+        style.textContent = `
         .reviewai-history {
           box-sizing: border-box;
           padding: 16px;
@@ -274,29 +277,77 @@ Gerrit.install(plugin => {
           font-size: 0.9rem;
         }
       `;
-      container.appendChild(style);
+        container.appendChild(style);
 
-      const intro = document.createElement('p');
-      intro.className = 'reviewai-history__intro';
-      intro.textContent =
-        'Chat with the AI by sending a patch set comment addressed to the bot. AI review comments remain in the normal Gerrit discussion.';
-      container.appendChild(intro);
+        const intro = document.createElement('p');
+        intro.className = 'reviewai-history__intro';
+        intro.textContent =
+          'Chat with the AI by sending a patch set comment addressed to the bot. AI review comments remain in the normal Gerrit discussion.';
+        container.appendChild(intro);
 
+        this._content = document.createElement('div');
+        container.appendChild(this._content);
+
+        const composer = document.createElement('form');
+        composer.className = 'reviewai-history__composer';
+        composer.addEventListener('submit', event => this._submitMessage(event));
+
+        const label = document.createElement('div');
+        label.className = 'reviewai-history__composer-label';
+        label.textContent = 'Message AI';
+
+        this._composerInput = document.createElement('textarea');
+        this._composerInput.className = 'reviewai-history__composer-input';
+        this._composerInput.rows = 1;
+        this._composerInput.placeholder = 'Ask the AI about this change...';
+        this._composerInput.addEventListener('input', event => {
+          this._draftMessage = event.target.value;
+          this._resizeComposerInput(event.target);
+        });
+        this._composerInput.addEventListener('keydown', event => this._handleComposerKeydown(event));
+
+        const actions = document.createElement('div');
+        actions.className = 'reviewai-history__composer-actions';
+
+        this._composerButton = document.createElement('button');
+        this._composerButton.className = 'reviewai-history__composer-button';
+        this._composerButton.type = 'submit';
+
+        const hint = document.createElement('div');
+        hint.className = 'reviewai-history__composer-hint';
+        hint.textContent = 'Replies may take a few seconds and will also appear in Gerrit comments.';
+
+        actions.appendChild(this._composerButton);
+        actions.appendChild(hint);
+
+        composer.appendChild(label);
+        composer.appendChild(this._composerInput);
+        composer.appendChild(actions);
+        container.appendChild(composer);
+
+        this._container = container;
+      }
+
+      if (this.firstChild !== this._container) {
+        this.replaceChildren(this._container);
+      }
+
+      this._content.replaceChildren();
       if (this._loadingChangeNumber !== null) {
         const loading = document.createElement('div');
         loading.className = 'reviewai-history__state';
         loading.textContent = 'Loading AI review history...';
-        container.appendChild(loading);
+        this._content.appendChild(loading);
       } else if (this._error) {
         const error = document.createElement('div');
         error.className = 'reviewai-history__state';
         error.textContent = 'Failed to load AI review history.';
-        container.appendChild(error);
+        this._content.appendChild(error);
       } else if (!this._entries.length) {
         const empty = document.createElement('div');
         empty.className = 'reviewai-history__state';
         empty.textContent = 'No AI chat messages were found on this change yet.';
-        container.appendChild(empty);
+        this._content.appendChild(empty);
       } else {
         const list = document.createElement('div');
         list.className = 'reviewai-history__list';
@@ -352,51 +403,16 @@ Gerrit.install(plugin => {
           list.appendChild(item);
         });
 
-        container.appendChild(list);
+        this._content.appendChild(list);
       }
 
-      const composer = document.createElement('form');
-      composer.className = 'reviewai-history__composer';
-      composer.addEventListener('submit', event => this._submitMessage(event));
-
-      const label = document.createElement('div');
-      label.className = 'reviewai-history__composer-label';
-      label.textContent = 'Message AI';
-
-      const input = document.createElement('textarea');
-      input.className = 'reviewai-history__composer-input';
-      input.rows = 1;
-      input.placeholder = 'Ask the AI about this change...';
-      input.disabled = this._submitting;
-      input.value = this._draftMessage;
-      input.addEventListener('input', event => {
-        this._draftMessage = event.target.value;
-        this._resizeComposerInput(event.target);
-      });
-      input.addEventListener('keydown', event => this._handleComposerKeydown(event));
-
-      const actions = document.createElement('div');
-      actions.className = 'reviewai-history__composer-actions';
-
-      const button = document.createElement('button');
-      button.className = 'reviewai-history__composer-button';
-      button.type = 'submit';
-      button.disabled = this._submitting;
-      button.textContent = this._submitting ? 'Sending...' : 'Send';
-
-      const hint = document.createElement('div');
-      hint.className = 'reviewai-history__composer-hint';
-      hint.textContent = 'Replies may take a few seconds and will also appear in Gerrit comments.';
-
-      actions.appendChild(button);
-      actions.appendChild(hint);
-
-      composer.appendChild(label);
-      composer.appendChild(input);
-      composer.appendChild(actions);
-      container.appendChild(composer);
-      this.appendChild(container);
-      this._resizeComposerInput(input);
+      this._composerInput.disabled = this._submitting;
+      if (this._composerInput.value !== this._draftMessage) {
+        this._composerInput.value = this._draftMessage;
+      }
+      this._composerButton.disabled = this._submitting;
+      this._composerButton.textContent = this._submitting ? 'Sending...' : 'Send';
+      this._resizeComposerInput(this._composerInput);
     }
 
     _formatLocation(entry) {
