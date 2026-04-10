@@ -19,6 +19,8 @@ package com.googlesource.gerrit.plugins.reviewai.web;
 import com.google.gerrit.entities.Change;
 import com.google.gerrit.extensions.api.changes.ChangeApi;
 import com.google.gerrit.extensions.common.AccountInfo;
+import com.google.gerrit.extensions.common.ChangeInfo;
+import com.google.gerrit.extensions.common.ChangeMessageInfo;
 import com.google.gerrit.extensions.common.CommentInfo;
 import com.google.gerrit.extensions.restapi.Response;
 import com.google.gerrit.extensions.restapi.RestReadView;
@@ -32,16 +34,21 @@ import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.api.gerri
 import com.googlesource.gerrit.plugins.reviewai.config.ConfigCreator;
 import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
 import com.googlesource.gerrit.plugins.reviewai.localization.Localizer;
+import com.googlesource.gerrit.plugins.reviewai.settings.Settings;
 import com.googlesource.gerrit.plugins.reviewai.web.model.AiReviewHistoryInfo;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.TimeZone;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class AiReviewHistory implements RestReadView<ChangeResource> {
   private static final SimpleDateFormat DATE_FORMAT = newFormat();
@@ -65,19 +72,49 @@ public class AiReviewHistory implements RestReadView<ChangeResource> {
     try (ManualRequestContext requestContext = config.openRequestContext()) {
       ChangeApi changeApi = config.getGerritApi().changes().id(projectName, change.getChangeId());
       Map<String, List<CommentInfo>> comments = changeApi.commentsRequest().get();
+      ChangeInfo changeInfo = changeApi.get();
 
       return Response.ok(
           collector.collect(
               config,
               localizer,
               config.getUserId().get(),
-              toInlineComments(comments)));
+              mergeComments(
+                  comments,
+                  Optional.ofNullable(changeInfo).map(info -> info.messages).orElse(null))));
     }
+  }
+
+  static Map<String, List<GerritComment>> mergeComments(
+      Map<String, List<CommentInfo>> inlineComments, Collection<ChangeMessageInfo> changeMessages) {
+    Map<String, List<GerritComment>> result = toInlineComments(inlineComments);
+    List<GerritComment> mergedPatchSetComments =
+        new ArrayList<>(result.getOrDefault(Settings.GERRIT_PATCH_SET_FILENAME, List.of()));
+    if (changeMessages == null) {
+      return result;
+    }
+
+    for (ChangeMessageInfo changeMessage : changeMessages) {
+      GerritComment patchSetComment = toComment(changeMessage);
+      boolean duplicate =
+          mergedPatchSetComments.stream().anyMatch(existing -> isDuplicatePatchSetMessage(existing, patchSetComment));
+      if (!duplicate) {
+        mergedPatchSetComments.add(patchSetComment);
+      }
+    }
+
+    if (!mergedPatchSetComments.isEmpty()) {
+      result.put(Settings.GERRIT_PATCH_SET_FILENAME, mergedPatchSetComments);
+    }
+    return result;
   }
 
   private static Map<String, List<GerritComment>> toInlineComments(
       Map<String, List<CommentInfo>> comments) {
     Map<String, List<GerritComment>> result = new HashMap<>();
+    if (comments == null) {
+      return result;
+    }
     for (Map.Entry<String, List<CommentInfo>> entry : comments.entrySet()) {
       result.put(
           entry.getKey(),
@@ -113,6 +150,24 @@ public class AiReviewHistory implements RestReadView<ChangeResource> {
     comment.setCommitId(commentInfo.commitId);
     comment.setFilename(filename);
     return comment;
+  }
+
+  private static GerritComment toComment(ChangeMessageInfo messageInfo) {
+    GerritComment comment = new GerritComment();
+    Optional.ofNullable(messageInfo.author).ifPresent(author -> comment.setAuthor(toAuthor(author)));
+    comment.setId(messageInfo.id);
+    comment.setTag(messageInfo.tag);
+    Optional.ofNullable(messageInfo.date).ifPresent(date -> comment.setUpdated(toDateString(date)));
+    comment.setMessage(messageInfo.message);
+    comment.setPatchSet(messageInfo._revisionNumber);
+    comment.setFilename(Settings.GERRIT_PATCH_SET_FILENAME);
+    return comment;
+  }
+
+  private static boolean isDuplicatePatchSetMessage(GerritComment existing, GerritComment incoming) {
+    return Stream.of(existing.getChangeMessageId(), existing.getId())
+        .filter(Objects::nonNull)
+        .anyMatch(existingId -> existingId.equals(incoming.getId()));
   }
 
   private static GerritComment.Author toAuthor(AccountInfo authorInfo) {
