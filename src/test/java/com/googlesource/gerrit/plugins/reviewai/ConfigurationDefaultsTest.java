@@ -80,6 +80,12 @@ public class ConfigurationDefaultsTest {
     assertEquals(Configuration.OPENAI_DOMAIN, configuration.getAiDomain());
   }
 
+  @Test
+  public void shouldDefaultNeutralReviewScoreConversionToEnabled() {
+    Configuration configuration = createConfiguration(AiBackends.OPENAI, LangChainProviders.OPENAI);
+    assertEquals(true, configuration.getConvertNeutralReviewScoreToPositive());
+  }
+
   private Configuration createConfiguration(AiBackends backend, LangChainProviders provider) {
     PluginConfig projectConfig = emptyPluginConfig();
     PluginConfig globalConfig = pluginConfigWithBackend(backend, provider);

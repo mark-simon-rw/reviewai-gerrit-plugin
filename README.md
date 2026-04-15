@@ -194,6 +194,8 @@ directive = End each reply with \"Hope this helps!\"
   **NOTE**: Extensions without a leading dot (e.g., 'py') are also accepted.
 - `enabledVoting`: Initially disabled (false). If set to true, allows AI to cast a vote on each reviewed Patch Set by
   assigning a score.
+- `convertNeutralReviewScoreToPositive`: Enabled by default (true). When enabled, a neutral final review score (`0`)
+  is submitted as `+1` when the permitted voting range allows it. Set it to false to keep neutral reviews at `0`.
 - `votingMinScore`: The lowest possible score that can be given to a Patch Set (Default value: -1).
 - `votingMaxScore`: The highest possible score that can be given to a Patch Set (Default value: +1).
 - `filterNegativeComments`: Activated by default (true), ensuring only negative review comments (scored below the
@@ -513,6 +515,7 @@ aiReviewCommitMessages: true
 aiReviewPatchSet: true
 aiReviewTemperature: 0.2
 aiStreamOutput: false
+convertNeutralReviewScoreToPositive: true
 directive:
     First directive
     Second directive

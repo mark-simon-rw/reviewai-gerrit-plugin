@@ -192,9 +192,16 @@ public class PatchSetReviewer {
   private Integer getReviewScore(GerritChange change) {
     log.debug("Calculating review score for change ID: {}", change.getFullChangeId());
     if (config.isVotingEnabled()) {
-      return change.getIsCommentEvent()
-          ? null
-          : (reviewScores.isEmpty() ? 0 : Collections.min(reviewScores));
+      if (change.getIsCommentEvent()) {
+        return null;
+      }
+      Integer reviewScore = reviewScores.isEmpty() ? 0 : Collections.min(reviewScores);
+      if (reviewScore == 0
+          && config.getConvertNeutralReviewScoreToPositive()
+          && changeSetData.getVotingMaxScore() >= 1) {
+        return 1;
+      }
+      return reviewScore;
     } else {
       return null;
     }

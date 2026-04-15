@@ -72,6 +72,7 @@ public class Configuration extends ConfigCore {
   private static final List<String> DEFAULT_DIRECTIVES = new ArrayList<>();
   private static final int DEFAULT_MAX_REVIEW_LINES = 1000;
   private static final boolean DEFAULT_ENABLED_VOTING = false;
+  private static final boolean DEFAULT_CONVERT_NEUTRAL_REVIEW_SCORE_TO_POSITIVE = true;
   private static final boolean DEFAULT_FILTER_NEGATIVE_COMMENTS = true;
   private static final int DEFAULT_FILTER_COMMENTS_BELOW_SCORE = 0;
   private static final boolean DEFAULT_FILTER_RELEVANT_COMMENTS = true;
@@ -128,6 +129,8 @@ public class Configuration extends ConfigCore {
   private static final String KEY_MAX_REVIEW_LINES = "maxReviewLines";
   private static final String KEY_ENABLED_FILE_EXTENSIONS = "enabledFileExtensions";
   private static final String KEY_ENABLED_VOTING = "enabledVoting";
+  private static final String KEY_CONVERT_NEUTRAL_REVIEW_SCORE_TO_POSITIVE =
+      "convertNeutralReviewScoreToPositive";
   private static final String KEY_FILTER_NEGATIVE_COMMENTS = "filterNegativeComments";
   private static final String KEY_FILTER_COMMENTS_BELOW_SCORE = "filterCommentsBelowScore";
   private static final String KEY_FILTER_RELEVANT_COMMENTS = "filterRelevantComments";
@@ -286,6 +289,12 @@ public class Configuration extends ConfigCore {
 
   public boolean isVotingEnabled() {
     return getBoolean(KEY_ENABLED_VOTING, DEFAULT_ENABLED_VOTING);
+  }
+
+  public boolean getConvertNeutralReviewScoreToPositive() {
+    return getBoolean(
+        KEY_CONVERT_NEUTRAL_REVIEW_SCORE_TO_POSITIVE,
+        DEFAULT_CONVERT_NEUTRAL_REVIEW_SCORE_TO_POSITIVE);
   }
 
   public boolean getFilterNegativeComments() {

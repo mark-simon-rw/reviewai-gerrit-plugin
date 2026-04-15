@@ -20,6 +20,7 @@ aiSystemPromptInstructions: Act as a PatchSet Reviewer
 aiUploadedChunkSizeMb: 5
 codeContextOnDemandBasePath: 
 codeContextPolicy: ON_DEMAND
+convertNeutralReviewScoreToPositive: true
 directive: 
 disabledGroups: 
 disabledTopicFilter: 

@@ -40,6 +40,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 import static com.googlesource.gerrit.plugins.reviewai.listener.EventHandlerTask.SupportedEvents;
 import static com.googlesource.gerrit.plugins.reviewai.settings.Settings.GERRIT_PATCH_SET_FILENAME;
 import static java.net.HttpURLConnection.HTTP_BAD_REQUEST;
+import static org.mockito.Mockito.when;
 
 @Slf4j
 @RunWith(MockitoJUnitRunner.class)
@@ -284,5 +285,24 @@ public class OpenAiReviewUnifiedTest extends OpenAiReviewTestBase {
         "format_replies",
         aiRequestBody.getAsJsonObject("text").getAsJsonObject("format").get("name").getAsString());
     Assert.assertFalse(aiRequestBody.has("tools"));
+  }
+
+  @Test
+  public void patchSetCreatedConvertsNeutralReviewScoreToPositiveWhenConfigured() throws Exception {
+    when(globalConfig.getBoolean(Mockito.eq("enabledVoting"), Mockito.anyBoolean())).thenReturn(true);
+    when(
+            globalConfig.getBoolean(
+                Mockito.eq("convertNeutralReviewScoreToPositive"), Mockito.anyBoolean()))
+        .thenReturn(true);
+    setupMockRequestCreateResponseFromBody(
+        readTestFile(RESOURCE_OPENAI_PATH + "openAiRunStepsResponse.json")
+            .replace("\\\"score\\\": -1", "\\\"score\\\": 0"),
+        null,
+        null);
+
+    handleEventBasedOnType(SupportedEvents.PATCH_SET_CREATED);
+
+    ArgumentCaptor<ReviewInput> captor = testRequestSent();
+    Assert.assertEquals(1, captor.getValue().labels.get("Code-Review").intValue());
   }
 }
