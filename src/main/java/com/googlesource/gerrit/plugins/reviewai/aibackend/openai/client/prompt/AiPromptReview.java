@@ -143,7 +143,7 @@ public class AiPromptReview extends AiPromptBase implements IAiPrompt {
     log.debug("Review instructions formed: {}", instructions);
   }
 
-  private String getScopeAndReviewConstraints() {
+  protected String getScopeAndReviewConstraints() {
     List<String> constraints = new ArrayList<>(List.of(DEFAULT_AI_ASSISTANT_INSTRUCTIONS_NO_FILE_CONTEXT));
     List<String> commonInstructions = new ArrayList<>();
     addCommonAiAssistantInstructions(commonInstructions, false);
@@ -153,7 +153,7 @@ public class AiPromptReview extends AiPromptBase implements IAiPrompt {
     return joinWithDoubleNewLine(constraints);
   }
 
-  private String getMandatoryResponseFormat() {
+  protected String getMandatoryResponseFormat() {
     return joinWithNewLine(
         splitString(DEFAULT_AI_ASSISTANT_INSTRUCTIONS_RESPONSE_FORMAT.strip(), "\n").stream()
             .map(String::strip)
@@ -162,7 +162,7 @@ public class AiPromptReview extends AiPromptBase implements IAiPrompt {
             .toList());
   }
 
-  private String buildSection(String title, String body) {
+  protected String buildSection(String title, String body) {
     return "# " + title + "\n\n" + body.strip();
   }
 
