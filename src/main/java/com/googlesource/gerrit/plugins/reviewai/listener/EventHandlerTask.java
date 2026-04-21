@@ -17,7 +17,6 @@
 package com.googlesource.gerrit.plugins.reviewai.listener;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Splitter;
 import com.google.gerrit.entities.Account;
 import com.google.gerrit.server.CurrentUser;
 import com.google.gerrit.server.IdentifiedUser;
@@ -36,7 +35,6 @@ import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.data.Chan
 import com.googlesource.gerrit.plugins.reviewai.web.AiReviewPermission;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -178,15 +176,6 @@ public class EventHandlerTask implements Runnable {
           "AI review access is explicitly denied for project {} and branch {}",
           change.getProjectNameKey(),
           change.getBranchNameKey());
-      return false;
-    }
-
-    List<String> enabledProjects =
-        Splitter.on(",").omitEmptyStrings().splitToList(config.getEnabledProjects());
-    if (!config.isGlobalEnable()
-        && !enabledProjects.contains(change.getProjectNameKey().get())
-        && !config.isProjectEnable()) {
-      log.debug("The project {} is not enabled for review", change.getProjectNameKey());
       return false;
     }
 

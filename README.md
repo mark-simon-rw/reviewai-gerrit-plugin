@@ -32,8 +32,6 @@ shows command reference directly in Gerrit.
 
 - `aiToken`: AI token.
 - `gerritUserName`: Gerrit username of AI user.
-- `globalEnable`: Default value is false. The plugin will only review specified repositories. If set to true, the plugin
-  will by default review all pull requests.
 
   For enhanced security, consider storing sensitive information like aiToken in a secure location or file.
   Detailed instructions on how to do this will be provided later in this document.
@@ -165,12 +163,6 @@ OpenAI is used by default, and you can select Google Gemini or Moonshot by confi
   they are created or updated.
 - `aiReviewCommitMessages`: The default value is true. When enabled, this option also verifies if the commit message
   matches with the content of the Change Set.
-- `enabledUsers`: By default, every user is enabled to have their Patch Sets and comments reviewed. To limit review
-  capabilities to specific users, list their usernames in this setting, separated by commas.
-- `disabledUsers`: Functions oppositely to enabledUsers.
-- `enabledGroups`: By default, all groups are permitted to have their Patch Sets and comments reviewed. To restrict
-  review access to certain groups, specify their names in this setting, separating them with commas.
-- `disabledGroups`: Operates in reverse to `enabledGroups`, excluding specified groups from reviews.
 - `enabledTopicFilter`: Specifies a list of keywords that trigger AI reviews based on the topic of the Patch Set.
   When this setting is active, only Patch Sets and their associated comments containing at least one of these keywords
   in the topic are reviewed.
@@ -251,18 +243,6 @@ directive = End each reply with \"Hope this helps!\"
   (default), `GEMINI`, and `MOONSHOT`. When a provider different from `OPENAI` is selected, and `aiDomain` retains its
   default value, the default endpoint of the selected provider is applied automatically.
 - `lcMaxMemoryTokens`: Maximum number of tokens retained in memory per Change. The default value is 16K.
-
-### Optional Parameters for Global Configuration only
-
-- `globalEnable`: Set to false by default, meaning the plugin will review only designated repositories. If enabled, the
-  plugin will automatically review all pull requests by default (not recommended in production environments).
-- `enabledProjects`: The default value is an empty string. If globalEnable is set to false, the plugin will only run in
-  the repositories specified here. The value should be a comma-separated list of repository names, for example:
-  "project1,project2,project3".
-
-### Optional Parameters for Project Configuration only
-
-- `isEnabled`: The default is false. If set to true, the plugin will review the Patch Set of this project.
 
 ### Advanced Connection Parameters for OpenAI
 
@@ -519,21 +499,14 @@ convertNeutralReviewScoreToPositive: true
 directive:
     First directive
     Second directive
-disabledGroups:
 disabledTopicFilter:
-disabledUsers:
 enableMessageDebugging: true
 enabledFileExtensions:
     py
     java
     js
     (...)
-enabledGroups:
-    ALL
-enabledProjects:
 enabledTopicFilter:
-    ALL
-enabledUsers:
     ALL
 filterCommentsBelowScore: 0
 filterCommentsRelevanceThreshold: 0.6

@@ -23,13 +23,10 @@ import com.google.gerrit.server.IdentifiedUser;
 import com.google.gerrit.server.account.AccountCache;
 import com.google.gerrit.server.account.AccountState;
 import com.google.gerrit.extensions.api.GerritApi;
-import com.google.gerrit.extensions.api.accounts.AccountApi;
-import com.google.gerrit.extensions.api.accounts.Accounts;
 import com.google.gerrit.extensions.api.changes.*;
 import com.google.gerrit.extensions.api.changes.ChangeApi.CommentsRequest;
 import com.google.gerrit.extensions.common.ChangeInfo;
 import com.google.gerrit.extensions.common.CommentInfo;
-import com.google.gerrit.extensions.common.GroupInfo;
 import com.google.gerrit.extensions.restapi.RestApiException;
 import com.google.gerrit.json.OutputFormat;
 import com.google.gerrit.server.config.PluginConfig;
@@ -102,7 +99,6 @@ public class ReviewTestBase extends TestBase {
   protected static final String GERRIT_USER_ACCOUNT_NAME = "Test";
   protected static final String GERRIT_USER_ACCOUNT_EMAIL = "test@example.com";
   protected static final String GERRIT_USER_USERNAME = "test";
-  protected static final String GERRIT_USER_GROUP = "Test";
   protected static final String AI_TOKEN = "tk-test";
   protected static final String AI_DOMAIN = "http://localhost:9527";
   protected static final String GERRIT_UI_PROMPTS_PATH = "/gerrit-prompts.ts?format=TEXT";
@@ -189,9 +185,6 @@ public class ReviewTestBase extends TestBase {
         .thenReturn(1);
 
     projectConfig = mock(PluginConfig.class);
-
-    // Mock the Project Config values
-    when(projectConfig.getBoolean(Mockito.eq("isEnabled"), Mockito.anyBoolean())).thenReturn(true);
   }
 
   protected void initConfig() {
@@ -203,15 +196,11 @@ public class ReviewTestBase extends TestBase {
   protected void setupMockRequests() throws RestApiException {
     mockGerritUiPromptsApiCall();
 
-    Accounts accountsMock = mockGerritAccountsRestEndpoint();
     // Mock the behavior of the gerritAccountIdUri request
     mockGerritAccountsQueryApiCall(GERRIT_AI_USERNAME, GERRIT_AI_ACCOUNT_ID);
 
     // Mock the behavior of the gerritAccountIdUri request
     mockGerritAccountsQueryApiCall(GERRIT_USER_USERNAME, GERRIT_USER_ACCOUNT_ID);
-
-    // Mock the behavior of the gerritAccountGroups request
-    mockGerritAccountGroupsApiCall(accountsMock, GERRIT_USER_ACCOUNT_ID);
 
     mockGerritChangeApiRestEndpoint();
 
@@ -252,28 +241,10 @@ public class ReviewTestBase extends TestBase {
                             .encodeToString(promptsSource.getBytes(java.nio.charset.StandardCharsets.UTF_8)))));
   }
 
-  private Accounts mockGerritAccountsRestEndpoint() {
-    Accounts accountsMock = mock(Accounts.class);
-    when(gerritApi.accounts()).thenReturn(accountsMock);
-    return accountsMock;
-  }
-
   private void mockGerritAccountsQueryApiCall(String username, int expectedAccountId) {
-    AccountState accountStateMock = mock(AccountState.class);
-    Account accountMock = mock(Account.class);
-    when(accountStateMock.account()).thenReturn(accountMock);
-    when(accountMock.id()).thenReturn(Account.id(expectedAccountId));
-    when(accountCacheMock.getByUsername(username)).thenReturn(Optional.of(accountStateMock));
-  }
-
-  private void mockGerritAccountGroupsApiCall(Accounts accountsMock, int accountId)
-      throws RestApiException {
-    List<GroupInfo> groups =
-        readTestFileToType(
-            "__files/gerritAccountGroups.json", new TypeLiteral<List<GroupInfo>>() {}.getType());
-    AccountApi accountApiMock = mock(AccountApi.class);
-    when(accountsMock.id(accountId)).thenReturn(accountApiMock);
-    when(accountApiMock.getGroups()).thenReturn(groups);
+    Account account = Account.builder(Account.id(expectedAccountId), Instant.now()).build();
+    AccountState accountState = AccountState.forAccount(account, Collections.emptyList());
+    lenient().when(accountCacheMock.getByUsername(username)).thenReturn(Optional.of(accountState));
   }
 
   private void mockGerritChangeDetailsApiCall() throws RestApiException {

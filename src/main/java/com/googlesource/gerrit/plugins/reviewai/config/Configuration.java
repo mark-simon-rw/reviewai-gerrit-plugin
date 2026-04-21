@@ -31,8 +31,6 @@ import static com.googlesource.gerrit.plugins.reviewai.settings.Settings.LangCha
 public class Configuration extends ConfigCore {
   // Config Constants
   public static final String DEFAULT_EMPTY_SETTING = "";
-  public static final String ENABLED_USERS_ALL = "ALL";
-  public static final String ENABLED_GROUPS_ALL = "ALL";
   public static final String ENABLED_TOPICS_ALL = "ALL";
 
   // Default Config values
@@ -52,14 +50,8 @@ public class Configuration extends ConfigCore {
   private static final boolean DEFAULT_FULL_FILE_REVIEW = true;
   private static final String DEFAULT_CODE_CONTEXT_POLICY = "ON_DEMAND";
   private static final String DEFAULT_CODE_CONTEXT_ON_DEMAND_BASE_PATH = "";
-  private static final boolean DEFAULT_GLOBAL_ENABLE = false;
-  private static final String DEFAULT_DISABLED_USERS = "";
-  private static final String DEFAULT_ENABLED_USERS = ENABLED_USERS_ALL;
-  private static final String DEFAULT_DISABLED_GROUPS = "";
-  private static final String DEFAULT_ENABLED_GROUPS = ENABLED_GROUPS_ALL;
   private static final String DEFAULT_DISABLED_TOPIC_FILTER = "";
   private static final String DEFAULT_ENABLED_TOPIC_FILTER = ENABLED_TOPICS_ALL;
-  private static final String DEFAULT_ENABLED_PROJECTS = "";
   private static final String DEFAULT_ENABLED_FILE_EXTENSIONS =
       String.join(
           ",",
@@ -68,7 +60,6 @@ public class Configuration extends ConfigCore {
             ".swift", ".kt", ".r", ".jl", ".go", ".scala", ".pl", ".pm", ".rs", ".dart", ".lua",
             ".sh", ".vb", ".bat"
           });
-  private static final boolean DEFAULT_PROJECT_ENABLE = false;
   private static final List<String> DEFAULT_DIRECTIVES = new ArrayList<>();
   private static final int DEFAULT_MAX_REVIEW_LINES = 1000;
   private static final boolean DEFAULT_ENABLED_VOTING = false;
@@ -117,15 +108,8 @@ public class Configuration extends ConfigCore {
   private static final String KEY_FULL_FILE_REVIEW = "aiFullFileReview";
   private static final String KEY_CODE_CONTEXT_POLICY = "codeContextPolicy";
   private static final String KEY_CODE_CONTEXT_ON_DEMAND_BASE_PATH = "codeContextOnDemandBasePath";
-  private static final String KEY_PROJECT_ENABLE = "isEnabled";
-  private static final String KEY_GLOBAL_ENABLE = "globalEnable";
-  private static final String KEY_DISABLED_USERS = "disabledUsers";
-  private static final String KEY_ENABLED_USERS = "enabledUsers";
-  private static final String KEY_DISABLED_GROUPS = "disabledGroups";
-  private static final String KEY_ENABLED_GROUPS = "enabledGroups";
   private static final String KEY_DISABLED_TOPIC_FILTER = "disabledTopicFilter";
   private static final String KEY_ENABLED_TOPIC_FILTER = "enabledTopicFilter";
-  private static final String KEY_ENABLED_PROJECTS = "enabledProjects";
   private static final String KEY_MAX_REVIEW_LINES = "maxReviewLines";
   private static final String KEY_ENABLED_FILE_EXTENSIONS = "enabledFileExtensions";
   private static final String KEY_ENABLED_VOTING = "enabledVoting";
@@ -243,40 +227,12 @@ public class Configuration extends ConfigCore {
         KEY_CODE_CONTEXT_ON_DEMAND_BASE_PATH, DEFAULT_CODE_CONTEXT_ON_DEMAND_BASE_PATH);
   }
 
-  public boolean isProjectEnable() {
-    return projectConfig.getBoolean(KEY_PROJECT_ENABLE, DEFAULT_PROJECT_ENABLE);
-  }
-
-  public boolean isGlobalEnable() {
-    return globalConfig.getBoolean(KEY_GLOBAL_ENABLE, DEFAULT_GLOBAL_ENABLE);
-  }
-
-  public List<String> getDisabledUsers() {
-    return splitConfig(getString(KEY_DISABLED_USERS, DEFAULT_DISABLED_USERS));
-  }
-
-  public List<String> getEnabledUsers() {
-    return splitConfig(getString(KEY_ENABLED_USERS, DEFAULT_ENABLED_USERS));
-  }
-
-  public List<String> getDisabledGroups() {
-    return splitConfig(getString(KEY_DISABLED_GROUPS, DEFAULT_DISABLED_GROUPS));
-  }
-
-  public List<String> getEnabledGroups() {
-    return splitConfig(getString(KEY_ENABLED_GROUPS, DEFAULT_ENABLED_GROUPS));
-  }
-
   public List<String> getDisabledTopicFilter() {
     return splitConfig(getString(KEY_DISABLED_TOPIC_FILTER, DEFAULT_DISABLED_TOPIC_FILTER));
   }
 
   public List<String> getEnabledTopicFilter() {
     return splitConfig(getString(KEY_ENABLED_TOPIC_FILTER, DEFAULT_ENABLED_TOPIC_FILTER));
-  }
-
-  public String getEnabledProjects() {
-    return globalConfig.getString(KEY_ENABLED_PROJECTS, DEFAULT_ENABLED_PROJECTS);
   }
 
   public int getMaxReviewLines() {

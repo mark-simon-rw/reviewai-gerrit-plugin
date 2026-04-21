@@ -22,9 +22,7 @@ codeContextOnDemandBasePath:
 codeContextPolicy: ON_DEMAND
 convertNeutralReviewScoreToPositive: true
 directive: 
-disabledGroups: 
 disabledTopicFilter: 
-disabledUsers: 
 enableMessageDebugging: true
 enabledFileExtensions: 
     py
@@ -53,12 +51,7 @@ enabledFileExtensions:
     sh
     vb
     bat
-enabledGroups: 
-    ALL
-enabledProjects: 
 enabledTopicFilter: 
-    ALL
-enabledUsers: 
     ALL
 filterCommentsBelowScore: 0
 filterCommentsRelevanceThreshold: 0.6
