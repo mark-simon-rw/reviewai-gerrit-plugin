@@ -59,6 +59,31 @@ public class ConfigurationDefaultsTest {
   }
 
   @Test
+  public void shouldSelectFirstAiModelsEntryWhenDefaultIndexIsUnset() {
+    Configuration configuration =
+        createConfiguration(
+            new String[] {"OpenAI"},
+            new String[] {"OpenAI/gpt-4.1", "OpenAI/" + Configuration.DEFAULT_OPENAI_AI_MODEL});
+
+    assertEquals("gpt-4.1", configuration.getAiModel());
+    assertEquals("OpenAI/gpt-4.1", configuration.getSelectedAiModelRoute().modelRoute());
+  }
+
+  @Test
+  public void shouldSelectConfiguredAiModelsDefaultIndex() {
+    Configuration configuration =
+        createConfiguration(
+            new String[] {"OpenAI"},
+            new String[] {"OpenAI/gpt-4.1", "OpenAI/" + Configuration.DEFAULT_OPENAI_AI_MODEL},
+            2);
+
+    assertEquals(Configuration.DEFAULT_OPENAI_AI_MODEL, configuration.getAiModel());
+    assertEquals(
+        "OpenAI/" + Configuration.DEFAULT_OPENAI_AI_MODEL,
+        configuration.getSelectedAiModelRoute().modelRoute());
+  }
+
+  @Test
   public void shouldUseDefaultModelForProviderWithoutConfiguredModels() {
     Configuration configuration =
         createConfiguration(new String[] {"LangChain/MoonShot"}, new String[] {});
@@ -92,8 +117,13 @@ public class ConfigurationDefaultsTest {
   }
 
   private Configuration createConfiguration(String[] providers, String[] models) {
+    return createConfiguration(providers, models, null);
+  }
+
+  private Configuration createConfiguration(
+      String[] providers, String[] models, Integer defaultIndex) {
     PluginConfig projectConfig = emptyPluginConfig();
-    PluginConfig globalConfig = pluginConfig(providers, models);
+    PluginConfig globalConfig = pluginConfig(providers, models, defaultIndex);
 
     return new Configuration(
         (OneOffRequestContext) null,
@@ -104,10 +134,13 @@ public class ConfigurationDefaultsTest {
         Account.id(ReviewTestBase.GERRIT_USER_ACCOUNT_ID));
   }
 
-  private PluginConfig pluginConfig(String[] providers, String[] models) {
+  private PluginConfig pluginConfig(String[] providers, String[] models, Integer defaultIndex) {
     Config cfg = new Config();
     cfg.setStringList("plugin", PLUGIN_NAME, "aiProviders", List.of(providers));
     cfg.setStringList("plugin", PLUGIN_NAME, "aiModels", List.of(models));
+    if (defaultIndex != null) {
+      cfg.setInt("plugin", PLUGIN_NAME, "aiModelsDefaultIndex", defaultIndex);
+    }
     return PluginConfig.createFromGerritConfig(PLUGIN_NAME, cfg);
   }
 

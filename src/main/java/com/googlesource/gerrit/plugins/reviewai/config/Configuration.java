@@ -128,6 +128,8 @@ public class Configuration extends ConfigCore {
   private static final String KEY_FILTER_RELEVANT_COMMENTS = "filterRelevantComments";
   private static final String KEY_FILTER_COMMENTS_RELEVANCE_THRESHOLD =
       "filterCommentsRelevanceThreshold";
+  private static final String KEY_AI_MODELS_DEFAULT_INDEX =
+      AiProviderConfiguration.KEY_AI_MODELS_DEFAULT_INDEX;
   private static final String KEY_AI_MAX_MEMORY_TOKENS = "aiMaxMemoryTokens";
   private static final String KEY_INLINE_COMMENTS_AS_RESOLVED = "inlineCommentsAsResolved";
   private static final String KEY_PATCH_SET_COMMENTS_AS_RESOLVED = "patchSetCommentsAsResolved";
@@ -180,6 +182,10 @@ public class Configuration extends ConfigCore {
 
   public List<String> getAiModels() {
     return aiProviderConfiguration.getAiModels();
+  }
+
+  public int getAiModelsDefaultIndex() {
+    return aiProviderConfiguration.getAiModelsDefaultIndex();
   }
 
   public Map<String, String> getAiTokens() {

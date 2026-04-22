@@ -36,6 +36,9 @@ final class AiProviderConfiguration {
   static final String KEY_AI_MODELS = "aiModels";
   static final String KEY_AI_PROVIDER = "aiProviders";
   static final String KEY_AI_DOMAIN = "aiDomain";
+  static final String KEY_AI_MODELS_DEFAULT_INDEX = "aiModelsDefaultIndex";
+
+  private static final int DEFAULT_AI_MODELS_DEFAULT_INDEX = 1;
 
   private static final List<String> DEFAULT_AI_PROVIDER = List.of("OpenAI");
   private static final String SELECTED_AI_MODEL = "selectedAiModel";
@@ -117,6 +120,10 @@ final class AiProviderConfiguration {
     return tokens;
   }
 
+  int getAiModelsDefaultIndex() {
+    return config.getInt(KEY_AI_MODELS_DEFAULT_INDEX, DEFAULT_AI_MODELS_DEFAULT_INDEX);
+  }
+
   AiModelRoute getSelectedAiModelRoute() {
     String selectedRoute = config.getString(SELECTED_AI_MODEL);
     if (!selectedRoute.isBlank()) {
@@ -125,9 +132,7 @@ final class AiProviderConfiguration {
         return parsedRoute.get();
       }
     }
-    return getAiModels().stream()
-        .findFirst()
-        .flatMap(AiModelRoute::parse)
+    return getDefaultAiModelRoute()
         .orElse(
             new AiModelRoute(AiProviderTransport.OPENAI, AiProviderType.OPENAI, DEFAULT_OPENAI_AI_MODEL));
   }
@@ -150,6 +155,15 @@ final class AiProviderConfiguration {
 
   private Optional<String> canonicalProviderRoute(String providerRoute) {
     return parseProviderRoute(providerRoute).map(AiProviderRoute::id);
+  }
+
+  private Optional<AiModelRoute> getDefaultAiModelRoute() {
+    List<String> models = getAiModels();
+    int zeroBasedIndex = getAiModelsDefaultIndex() - 1;
+    if (zeroBasedIndex >= 0 && zeroBasedIndex < models.size()) {
+      return AiModelRoute.parse(models.get(zeroBasedIndex));
+    }
+    return models.stream().findFirst().flatMap(AiModelRoute::parse);
   }
 
   private Optional<AiProviderRoute> parseProviderRoute(String providerRoute) {
