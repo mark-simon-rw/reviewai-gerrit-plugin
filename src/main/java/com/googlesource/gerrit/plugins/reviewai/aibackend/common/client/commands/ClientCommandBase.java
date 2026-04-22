@@ -68,7 +68,7 @@ public abstract class ClientCommandBase extends ClientBase {
   private static final String OPTION_VALUES = "\"[^\"\\\\]*(?:\\\\.[^\"\\\\]*)*\"|\\S+";
 
   protected static final Pattern MESSAGE_COMMAND_PATTERN =
-      Pattern.compile("\\s*/" + COMMAND_MAP_INVERSE.get(CommandSet.MESSAGE) + "\\b(.*)$");
+      Pattern.compile("\\s*/" + COMMAND_MAP_INVERSE.get(CommandSet.MESSAGE) + "\\b(.*)$", Pattern.DOTALL);
   protected static final Pattern DIRECTIVE_COMMAND_PATTERN =
       Pattern.compile("\\s*/" + COMMAND_MAP_INVERSE.get(CommandSet.DIRECTIVES) + "\\b.*$");
   protected static final Pattern COMMAND_PATTERN =

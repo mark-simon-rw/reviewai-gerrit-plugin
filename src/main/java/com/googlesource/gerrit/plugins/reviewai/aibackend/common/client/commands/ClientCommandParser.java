@@ -111,6 +111,7 @@ public class ClientCommandParser extends ClientCommandBase {
     Matcher commandMatcher = COMMAND_PATTERN.matcher(comment);
     changeSetData.setHideOpenAiReview(true);
     while (commandMatcher.find()) {
+      log.debug("Parsing command: {} - Parsing args: {}", commandMatcher.group(1), commandMatcher.group(2));
       CommandSet command = COMMAND_MAP.get(commandMatcher.group(1));
       if (!parseSingleCommand(comment, commandMatcher)) {
         return false;
