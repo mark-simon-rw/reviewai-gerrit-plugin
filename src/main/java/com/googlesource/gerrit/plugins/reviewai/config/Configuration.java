@@ -20,13 +20,18 @@ import com.google.gerrit.entities.Account;
 import com.google.gerrit.extensions.api.GerritApi;
 import com.google.gerrit.server.config.PluginConfig;
 import com.google.gerrit.server.util.OneOffRequestContext;
+import com.googlesource.gerrit.plugins.reviewai.settings.AiProviderTransport;
+import com.googlesource.gerrit.plugins.reviewai.settings.AiProviderType;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.TreeMap;
 
 import static com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.prompt.AiPrompt.getJsonPromptValues;
 import static com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.code.context.CodeContextPolicyBase.CodeContextPolicies;
-import static com.googlesource.gerrit.plugins.reviewai.settings.Settings.AiBackends;
-import static com.googlesource.gerrit.plugins.reviewai.settings.Settings.LangChainProviders;
 
 public class Configuration extends ConfigCore {
   // Config Constants
@@ -34,17 +39,18 @@ public class Configuration extends ConfigCore {
   public static final String ENABLED_TOPICS_ALL = "ALL";
 
   // Default Config values
-  public static final String OPENAI_DOMAIN = "https://api.openai.com";
-  public static final String GEMINI_DOMAIN = "https://generativelanguage.googleapis.com";
-  public static final String MOONSHOT_DOMAIN = "https://api.moonshot.ai";
-  public static final String DEFAULT_AI_MODEL = "gpt-4o";
-  public static final String DEFAULT_GEMINI_AI_MODEL = "gemini-2.5-flash";
-  public static final String DEFAULT_MOONSHOT_AI_MODEL = "moonshot-v1-8k";
+  public static final String OPENAI_DOMAIN = AiProviderConfiguration.OPENAI_DOMAIN;
+  public static final String GEMINI_DOMAIN = AiProviderConfiguration.GEMINI_DOMAIN;
+  public static final String MOONSHOT_DOMAIN = AiProviderConfiguration.MOONSHOT_DOMAIN;
+  public static final String DEFAULT_OPENAI_AI_MODEL = AiProviderConfiguration.DEFAULT_OPENAI_AI_MODEL;
+  public static final String DEFAULT_GEMINI_AI_MODEL = AiProviderConfiguration.DEFAULT_GEMINI_AI_MODEL;
+  public static final String DEFAULT_MOONSHOT_AI_MODEL = AiProviderConfiguration.DEFAULT_MOONSHOT_AI_MODEL;
   public static final double DEFAULT_AI_REVIEW_TEMPERATURE = 0.2;
   public static final double DEFAULT_AI_COMMENT_TEMPERATURE = 1.0;
 
-  private static final String DEFAULT_AI_BACKEND = "OPENAI";
-  private static final String DEFAULT_LC_PROVIDER = "OPENAI";
+  private static final String KEY_AI_TOKENS = AiProviderConfiguration.KEY_AI_TOKENS;
+  private static final String KEY_AI_MODELS = AiProviderConfiguration.KEY_AI_MODELS;
+  private static final String KEY_AI_PROVIDER = AiProviderConfiguration.KEY_AI_PROVIDER;
   private static final boolean DEFAULT_REVIEW_PATCH_SET = true;
   private static final boolean DEFAULT_REVIEW_COMMIT_MESSAGES = true;
   private static final boolean DEFAULT_FULL_FILE_REVIEW = true;
@@ -80,7 +86,7 @@ public class Configuration extends ConfigCore {
   private static final int DEFAULT_AI_POLLING_TIMEOUT = 180;
   private static final int DEFAULT_AI_POLLING_INTERVAL = 1000;
   private static final int DEFAULT_AI_UPLOADED_CHUNK_SIZE_MB = 5;
-  private static final int DEFAULT_LC_MAX_MEMORY_TOKENS = 16384;
+  private static final int DEFAULT_AI_MAX_MEMORY_TOKENS = 16384;
   private static final boolean DEFAULT_ENABLE_MESSAGE_DEBUGGING = false;
   private static final List<String> DEFAULT_SELECTIVE_LOG_LEVEL_OVERRIDE = new ArrayList<>();
 
@@ -97,12 +103,14 @@ public class Configuration extends ConfigCore {
 
   // Config entry keys with list values
   public static final Set<String> LIST_TYPE_ENTRY_KEYS =
-      Set.of(KEY_DIRECTIVES, KEY_SELECTIVE_LOG_LEVEL_OVERRIDE);
+      Set.of(
+          KEY_DIRECTIVES,
+          KEY_SELECTIVE_LOG_LEVEL_OVERRIDE,
+          KEY_AI_PROVIDER,
+          KEY_AI_MODELS,
+          KEY_AI_TOKENS);
 
-  private static final String KEY_AI_TOKEN = "aiToken";
-  private static final String KEY_AI_DOMAIN = "aiDomain";
-  private static final String KEY_AI_MODEL = "aiModel";
-  private static final String KEY_AI_BACKEND = "aiBackend";
+  private static final String KEY_AI_DOMAIN = AiProviderConfiguration.KEY_AI_DOMAIN;
   private static final String KEY_REVIEW_COMMIT_MESSAGES = "aiReviewCommitMessages";
   private static final String KEY_REVIEW_PATCH_SET = "aiReviewPatchSet";
   private static final String KEY_FULL_FILE_REVIEW = "aiFullFileReview";
@@ -120,8 +128,7 @@ public class Configuration extends ConfigCore {
   private static final String KEY_FILTER_RELEVANT_COMMENTS = "filterRelevantComments";
   private static final String KEY_FILTER_COMMENTS_RELEVANCE_THRESHOLD =
       "filterCommentsRelevanceThreshold";
-  private static final String KEY_LC_MAX_MEMORY_TOKENS = "lcMaxMemoryTokens";
-  private static final String KEY_LC_PROVIDER = "lcProvider";
+  private static final String KEY_AI_MAX_MEMORY_TOKENS = "aiMaxMemoryTokens";
   private static final String KEY_INLINE_COMMENTS_AS_RESOLVED = "inlineCommentsAsResolved";
   private static final String KEY_PATCH_SET_COMMENTS_AS_RESOLVED = "patchSetCommentsAsResolved";
   private static final String KEY_IGNORE_OUTDATED_INLINE_COMMENTS = "ignoreOutdatedInlineComments";
@@ -134,6 +141,8 @@ public class Configuration extends ConfigCore {
   private static final String KEY_AI_UPLOADED_CHUNK_SIZE_MB = "aiUploadedChunkSizeMb";
   private static final String KEY_ENABLE_MESSAGE_DEBUGGING = "enableMessageDebugging";
 
+  private final AiProviderConfiguration aiProviderConfiguration;
+
   public Configuration(
       OneOffRequestContext context,
       GerritApi gerritApi,
@@ -142,10 +151,15 @@ public class Configuration extends ConfigCore {
       String gerritUserEmail,
       Account.Id userId) {
     super(context, gerritApi, globalConfig, projectConfig, gerritUserEmail, userId);
+    aiProviderConfiguration = new AiProviderConfiguration(this);
   }
 
   public String getAiToken() {
-    return getValidatedOrThrow(KEY_AI_TOKEN);
+    return aiProviderConfiguration.getAiToken();
+  }
+
+  public String getAiToken(AiProviderType provider) {
+    return aiProviderConfiguration.getAiToken(provider);
   }
 
   public String getGerritUserName() {
@@ -153,29 +167,35 @@ public class Configuration extends ConfigCore {
   }
 
   public String getAiDomain() {
-    String aiDomain = getString(KEY_AI_DOMAIN);
-    if (aiDomain != null && !aiDomain.isEmpty()) {
-      return aiDomain;
-    }
-
-    if (getAiBackend() == AiBackends.LANGCHAIN) {
-      return getDefaultLangChainDomain();
-    }
-
-    return OPENAI_DOMAIN;
+    return aiProviderConfiguration.getAiDomain();
   }
 
   public String getAiModel() {
-    String model = getString(KEY_AI_MODEL);
-    if (model != null && !model.isEmpty()) {
-      return model;
-    }
+    return aiProviderConfiguration.getAiModel();
+  }
 
-    if (getAiBackend() == AiBackends.LANGCHAIN) {
-      return getDefaultLangChainModel();
-    }
+  public List<String> getAiProviders() {
+    return aiProviderConfiguration.getAiProviders();
+  }
 
-    return DEFAULT_AI_MODEL;
+  public List<String> getAiModels() {
+    return aiProviderConfiguration.getAiModels();
+  }
+
+  public Map<String, String> getAiTokens() {
+    return aiProviderConfiguration.getAiTokens();
+  }
+
+  public AiModelRoute getSelectedAiModelRoute() {
+    return aiProviderConfiguration.getSelectedAiModelRoute();
+  }
+
+  public AiProviderType getAiProviderType() {
+    return aiProviderConfiguration.getAiProviderType();
+  }
+
+  public AiProviderTransport getAiProviderTransport() {
+    return aiProviderConfiguration.getAiProviderTransport();
   }
 
   // The default system prompt/instructions are specified in the prompt files and are passed as a
@@ -200,14 +220,6 @@ public class Configuration extends ConfigCore {
 
   public boolean getAiReviewPatchSet() {
     return getBoolean(KEY_REVIEW_PATCH_SET, DEFAULT_REVIEW_PATCH_SET);
-  }
-
-  public AiBackends getAiBackend() {
-    return getEnum(KEY_AI_BACKEND, DEFAULT_AI_BACKEND, AiBackends.class);
-  }
-
-  public LangChainProviders getLcProvider() {
-    return getEnum(KEY_LC_PROVIDER, DEFAULT_LC_PROVIDER, LangChainProviders.class);
   }
 
   public boolean getAiReviewCommitMessages() {
@@ -315,8 +327,8 @@ public class Configuration extends ConfigCore {
     return getInt(KEY_AI_CONNECTION_TIMEOUT, DEFAULT_AI_CONNECTION_TIMEOUT);
   }
 
-  public int getLcMaxMemoryTokens() {
-    return getInt(KEY_LC_MAX_MEMORY_TOKENS, DEFAULT_LC_MAX_MEMORY_TOKENS);
+  public int getAiMaxMemoryTokens() {
+    return getInt(KEY_AI_MAX_MEMORY_TOKENS, DEFAULT_AI_MAX_MEMORY_TOKENS);
   }
 
   public int getAiConnectionMaxRetryAttempts() {
@@ -346,26 +358,6 @@ public class Configuration extends ConfigCore {
   public List<String> getSelectiveLogLevelOverride() {
     return splitListIntoItems(
         KEY_SELECTIVE_LOG_LEVEL_OVERRIDE, DEFAULT_SELECTIVE_LOG_LEVEL_OVERRIDE);
-  }
-
-  private String getDefaultLangChainModel() {
-    return switch (getLcProvider()) {
-      case GEMINI -> DEFAULT_GEMINI_AI_MODEL;
-      case MOONSHOT -> DEFAULT_MOONSHOT_AI_MODEL;
-      case OPENAI -> DEFAULT_AI_MODEL;
-    };
-  }
-
-  private String getDefaultLangChainDomain() {
-    return switch (getLcProvider()) {
-      case GEMINI -> GEMINI_DOMAIN;
-      case MOONSHOT -> MOONSHOT_DOMAIN;
-      case OPENAI -> OPENAI_DOMAIN;
-    };
-  }
-
-  private static boolean isBlank(String value) {
-    return value == null || value.isBlank();
   }
 
   public boolean isDefinedKey(String key) {

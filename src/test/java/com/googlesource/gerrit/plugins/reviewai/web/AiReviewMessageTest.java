@@ -19,20 +19,34 @@ package com.googlesource.gerrit.plugins.reviewai.web;
 import com.google.gerrit.entities.Account;
 import com.google.gerrit.entities.Change;
 import com.google.gerrit.extensions.api.GerritApi;
+import com.google.gerrit.extensions.api.changes.ChangeApi;
+import com.google.gerrit.extensions.api.changes.Changes;
+import com.google.gerrit.extensions.api.changes.RevisionApi;
 import com.google.gerrit.extensions.restapi.AuthException;
+import com.google.gerrit.extensions.restapi.BadRequestException;
 import com.google.gerrit.server.change.ChangeResource;
 import com.googlesource.gerrit.plugins.reviewai.TestBase;
 import com.googlesource.gerrit.plugins.reviewai.config.ConfigCreator;
 import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
+import com.googlesource.gerrit.plugins.reviewai.data.PluginDataHandler;
+import com.googlesource.gerrit.plugins.reviewai.data.PluginDataHandlerBaseProvider;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 
+import static com.googlesource.gerrit.plugins.reviewai.config.dynamic.DynamicConfigManager.KEY_DYNAMIC_CONFIG;
+import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -42,6 +56,11 @@ public class AiReviewMessageTest extends TestBase {
   @Mock private Configuration config;
   @Mock private GerritApi gerritApi;
   @Mock private AiReviewPermission aiReviewPermission;
+  @Mock private PluginDataHandlerBaseProvider pluginDataHandlerBaseProvider;
+  @Mock private PluginDataHandler pluginDataHandler;
+  @Mock private Changes changes;
+  @Mock private ChangeApi changeApi;
+  @Mock private RevisionApi revisionApi;
 
   private AiReviewMessage view;
 
@@ -52,7 +71,17 @@ public class AiReviewMessageTest extends TestBase {
     when(changeResource.getChange()).thenReturn(change);
     when(changeResource.getProject()).thenReturn(PROJECT_NAME);
     when(configCreator.createConfig(PROJECT_NAME, CHANGE_ID)).thenReturn(config);
-    view = new AiReviewMessage(configCreator, gerritApi, aiReviewPermission);
+    when(config.getGerritUserName()).thenReturn("gpt");
+    when(config.getAiModels())
+        .thenReturn(List.of("OpenAI/gpt-4.1", "LangChain/MoonShot/moonshot-v1-8k"));
+    when(gerritApi.changes()).thenReturn(changes);
+    when(changes.id(PROJECT_NAME.get(), change.getChangeId())).thenReturn(changeApi);
+    when(changeApi.current()).thenReturn(revisionApi);
+    when(revisionApi.review(any())).thenReturn(null);
+    when(pluginDataHandlerBaseProvider.get(CHANGE_ID.toString())).thenReturn(pluginDataHandler);
+    view =
+        new AiReviewMessage(
+            configCreator, gerritApi, aiReviewPermission, pluginDataHandlerBaseProvider);
   }
 
   @Test(expected = AuthException.class)
@@ -62,6 +91,43 @@ public class AiReviewMessageTest extends TestBase {
     doThrow(new AuthException("AI review is not allowed for this change"))
         .when(aiReviewPermission)
         .checkCanAiReview(changeResource);
+
+    view.apply(changeResource, input);
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void storesSelectedModelNameFromReviewAiDropdown() throws Exception {
+    AiReviewMessage.Input input = new AiReviewMessage.Input();
+    input.message = "/review";
+    input.modelName = "LangChain/MoonShot/moonshot-v1-8k";
+
+    view.apply(changeResource, input);
+
+    ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+    verify(pluginDataHandler).setJsonValue(eq(KEY_DYNAMIC_CONFIG), captor.capture());
+    assertEquals("LangChain/MoonShot/moonshot-v1-8k", captor.getValue().get("selectedAiModel"));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void storesSelectedModelIdAlias() throws Exception {
+    AiReviewMessage.Input input = new AiReviewMessage.Input();
+    input.message = "/review";
+    input.modelId = "OpenAI/gpt-4.1";
+
+    view.apply(changeResource, input);
+
+    ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+    verify(pluginDataHandler).setJsonValue(eq(KEY_DYNAMIC_CONFIG), captor.capture());
+    assertEquals("OpenAI/gpt-4.1", captor.getValue().get("selectedAiModel"));
+  }
+
+  @Test(expected = BadRequestException.class)
+  public void rejectsInvalidSelectedModel() throws Exception {
+    AiReviewMessage.Input input = new AiReviewMessage.Input();
+    input.message = "/review";
+    input.modelName = "OpenAI/not-configured";
 
     view.apply(changeResource, input);
   }
