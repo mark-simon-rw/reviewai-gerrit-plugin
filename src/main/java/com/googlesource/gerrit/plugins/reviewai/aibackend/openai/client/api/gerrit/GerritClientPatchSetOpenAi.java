@@ -17,7 +17,10 @@
 package com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.gerrit;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.gerrit.extensions.api.changes.RevisionApi;
+import com.google.gerrit.extensions.common.CommitInfo;
 import com.google.gerrit.server.account.AccountCache;
+import com.google.gerrit.server.git.GitRepositoryManager;
 import com.google.gerrit.server.util.ManualRequestContext;
 import com.google.inject.Inject;
 import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
@@ -26,19 +29,43 @@ import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.data.Chan
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.api.gerrit.GerritChange;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.api.gerrit.GerritClientPatchSet;
 import lombok.extern.slf4j.Slf4j;
+import org.eclipse.jgit.diff.DiffFormatter;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.ObjectReader;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevTree;
+import org.eclipse.jgit.revwalk.RevWalk;
+import org.eclipse.jgit.treewalk.CanonicalTreeParser;
+import org.eclipse.jgit.treewalk.EmptyTreeIterator;
+
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.api.gerrit.GerritClientPatchSetHelper.*;
 
 @Slf4j
 public class GerritClientPatchSetOpenAi extends GerritClientPatchSet
     implements IGerritClientPatchSet {
+  private static final Pattern PATCH_DIFF_START = Pattern.compile("(?m)^diff --git ");
+
+  private final GitRepositoryManager repositoryManager;
   private GerritChange change;
   private ChangeSetData changeSetData;
 
-  @VisibleForTesting
   @Inject
+  public GerritClientPatchSetOpenAi(
+      Configuration config, AccountCache accountCache, GitRepositoryManager repositoryManager) {
+    super(config, accountCache);
+    this.repositoryManager = repositoryManager;
+  }
+
+  @VisibleForTesting
   public GerritClientPatchSetOpenAi(Configuration config, AccountCache accountCache) {
     super(config, accountCache);
+    this.repositoryManager = null;
   }
 
   public String getPatchSet(ChangeSetData changeSetData, GerritChange change) throws Exception {
@@ -58,7 +85,7 @@ public class GerritClientPatchSetOpenAi extends GerritClientPatchSet
 
   private String getPatchFromGerrit() throws Exception {
     try (ManualRequestContext requestContext = config.openRequestContext()) {
-      String formattedPatch =
+      RevisionApi currentRevision =
           config
               .getGerritApi()
               .changes()
@@ -66,13 +93,69 @@ public class GerritClientPatchSetOpenAi extends GerritClientPatchSet
                   change.getProjectName(),
                   change.getBranchNameKey().shortName(),
                   change.getChangeKey().get())
-              .current()
-              .patch()
-              .asString();
+              .current();
+      String formattedPatch = currentRevision.patch().asString();
       log.debug("Formatted Patch retrieved: {}", formattedPatch);
 
-      return filterPatch(formattedPatch);
+      return filterPatch(replaceDiffWithCompactGitDiff(formattedPatch, currentRevision));
     }
+  }
+
+  private String replaceDiffWithCompactGitDiff(String formattedPatch, RevisionApi currentRevision) {
+    if (repositoryManager == null) {
+      return formattedPatch;
+    }
+    try {
+      CommitInfo commit = currentRevision.commit(false);
+      String compactDiff = getCompactGitDiff(commit.commit);
+      if (compactDiff.isBlank()) {
+        return formattedPatch;
+      }
+      return replacePatchDiff(formattedPatch, compactDiff);
+    } catch (Exception e) {
+      log.warn("Could not generate compact git diff for patch set. Using Gerrit patch output.", e);
+      return formattedPatch;
+    }
+  }
+
+  private String getCompactGitDiff(String commitId) throws Exception {
+    try (Repository repository = repositoryManager.openRepository(change.getProjectNameKey());
+        RevWalk revWalk = new RevWalk(repository);
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        DiffFormatter diffFormatter = new DiffFormatter(outputStream)) {
+      RevCommit commit = revWalk.parseCommit(ObjectId.fromString(commitId));
+      diffFormatter.setRepository(repository);
+      diffFormatter.setDetectRenames(true);
+
+      if (commit.getParentCount() == 0) {
+        formatRootCommitDiff(repository, commit, diffFormatter);
+      } else {
+        RevCommit parent = revWalk.parseCommit(commit.getParent(0).getId());
+        RevTree parentTree = parent.getTree();
+        diffFormatter.format(parentTree, commit.getTree());
+      }
+
+      diffFormatter.flush();
+      return outputStream.toString(StandardCharsets.UTF_8);
+    }
+  }
+
+  private static void formatRootCommitDiff(
+      Repository repository, RevCommit commit, DiffFormatter diffFormatter) throws Exception {
+    try (ObjectReader reader = repository.newObjectReader()) {
+      CanonicalTreeParser newTreeParser = new CanonicalTreeParser();
+      newTreeParser.reset(reader, commit.getTree());
+      diffFormatter.format(new EmptyTreeIterator(), newTreeParser);
+    }
+  }
+
+  private static String replacePatchDiff(String formattedPatch, String compactDiff) {
+    Matcher diffStartMatcher = PATCH_DIFF_START.matcher(formattedPatch);
+    if (!diffStartMatcher.find()) {
+      return formattedPatch;
+    }
+
+    return formattedPatch.substring(0, diffStartMatcher.start()) + compactDiff;
   }
 
   private String filterPatch(String formattedPatch) {

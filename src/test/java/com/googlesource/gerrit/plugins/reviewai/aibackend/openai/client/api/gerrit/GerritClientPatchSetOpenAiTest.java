@@ -1,0 +1,127 @@
+/*
+ * Copyright (c) 2026. The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.googlesource.gerrit.plugins.reviewai.aibackend.openai.client.api.gerrit;
+
+import com.google.gerrit.extensions.api.GerritApi;
+import com.google.gerrit.extensions.api.changes.ChangeApi;
+import com.google.gerrit.extensions.api.changes.Changes;
+import com.google.gerrit.extensions.api.changes.FileApi;
+import com.google.gerrit.extensions.api.changes.RevisionApi;
+import com.google.gerrit.extensions.common.CommitInfo;
+import com.google.gerrit.extensions.common.DiffInfo;
+import com.google.gerrit.extensions.restapi.BinaryResult;
+import com.google.gerrit.server.account.AccountCache;
+import com.google.gerrit.server.git.GitRepositoryManager;
+import com.googlesource.gerrit.plugins.reviewai.TestBase;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.data.ChangeSetData;
+import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
+import org.junit.Assert;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
+@RunWith(MockitoJUnitRunner.class)
+public class GerritClientPatchSetOpenAiTest extends TestBase {
+  private static final Path TEST_RESOURCES_PATH = Paths.get("src/test/resources");
+  private static final String VERBOSE_RENAME_PATCH_FILE =
+      "__files/openai/gerritVerboseRenamePatch.txt";
+
+  @Mock private Configuration config;
+  @Mock private AccountCache accountCache;
+  @Mock private GitRepositoryManager repositoryManager;
+  @Mock private GerritApi gerritApi;
+  @Mock private Changes changes;
+  @Mock private ChangeApi changeApi;
+  @Mock private RevisionApi revisionApi;
+  @Mock private FileApi fileApi;
+  private Path gitDir;
+
+  @Test
+  public void getPatchSetUsesCompactGitRenameDiff() throws Exception {
+    RevCommit renameCommit = createRenameCommit();
+    mockGerritPatch(renameCommit);
+
+    GerritClientPatchSetOpenAi client =
+        new GerritClientPatchSetOpenAi(config, accountCache, repositoryManager);
+    String patchSet = client.getPatchSet(new ChangeSetData(1, -1, 1), getGerritChange());
+
+    Assert.assertTrue(patchSet.contains("diff --git a/old_name.py b/new_name.py"));
+    Assert.assertTrue(patchSet.contains("similarity index 100%"));
+    Assert.assertTrue(patchSet.contains("rename from old_name.py"));
+    Assert.assertTrue(patchSet.contains("rename to new_name.py"));
+    Assert.assertFalse(patchSet.contains("deleted file mode"));
+    Assert.assertFalse(patchSet.contains("new file mode"));
+    Assert.assertEquals(List.of("new_name.py"), client.getPatchSetFiles());
+  }
+
+  private RevCommit createRenameCommit() throws Exception {
+    try (Git git = Git.init().setDirectory(tempFolder.newFolder("repo")).call()) {
+      gitDir = git.getRepository().getDirectory().toPath();
+      Path workTree = git.getRepository().getWorkTree().toPath();
+
+      Files.writeString(workTree.resolve("old_name.py"), "print('same content')\n");
+      git.add().addFilepattern("old_name.py").call();
+      git.commit().setMessage("Add file").setAuthor("Test", "test@example.com").call();
+
+      Files.move(workTree.resolve("old_name.py"), workTree.resolve("new_name.py"));
+      git.rm().addFilepattern("old_name.py").call();
+      git.add().addFilepattern("new_name.py").call();
+      return git.commit().setMessage("Rename file").setAuthor("Test", "test@example.com").call();
+    }
+  }
+
+  private void mockGerritPatch(RevCommit renameCommit) throws Exception {
+    when(config.getGerritApi()).thenReturn(gerritApi);
+    when(gerritApi.changes()).thenReturn(changes);
+    when(changes.id(PROJECT_NAME.get(), BRANCH_NAME.shortName(), CHANGE_ID.get()))
+        .thenReturn(changeApi);
+    when(changeApi.current()).thenReturn(revisionApi);
+    when(revisionApi.patch()).thenReturn(BinaryResult.create(getVerboseRenamePatch()));
+
+    CommitInfo commitInfo = new CommitInfo();
+    commitInfo.commit = renameCommit.getName();
+    when(revisionApi.commit(false)).thenReturn(commitInfo);
+
+    when(repositoryManager.openRepository(any()))
+        .thenAnswer(
+            invocation ->
+                new FileRepositoryBuilder().setGitDir(gitDir.toFile()).setMustExist(true).build());
+
+    when(config.getEnabledFileExtensions()).thenReturn(List.of("py"));
+    when(revisionApi.file("new_name.py")).thenReturn(fileApi);
+    DiffInfo diffInfo = new DiffInfo();
+    diffInfo.content = new ArrayList<>();
+    when(fileApi.diff(0)).thenReturn(diffInfo);
+  }
+
+  private String getVerboseRenamePatch() throws Exception {
+    return Files.readString(TEST_RESOURCES_PATH.resolve(VERBOSE_RENAME_PATCH_FILE));
+  }
+}

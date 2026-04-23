@@ -33,6 +33,7 @@ import com.google.gerrit.server.config.PluginConfig;
 import com.google.gerrit.server.data.AccountAttribute;
 import com.google.gerrit.server.data.PatchSetAttribute;
 import com.google.gerrit.server.events.*;
+import com.google.gerrit.server.git.GitRepositoryManager;
 import com.google.gerrit.server.util.OneOffRequestContext;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -125,6 +126,7 @@ public class ReviewTestBase extends TestBase {
   @Mock protected ReviewResult reviewResult;
   @Mock protected CommentsRequest commentsRequestMock;
   @Mock protected AccountCache accountCacheMock;
+  @Mock protected GitRepositoryManager repositoryManager;
   @Mock protected ChangeSetDataProvider changeSetDataProvider;
   @Mock protected AiReviewPermission aiReviewPermission;
   @Mock protected IdentifiedUser.GenericFactory identifiedUserFactory;
@@ -322,6 +324,7 @@ public class ReviewTestBase extends TestBase {
                     bind(AiReviewPermission.class).toInstance(aiReviewPermission);
                     bind(IdentifiedUser.GenericFactory.class).toInstance(identifiedUserFactory);
                     bind(AccountCache.class).toInstance(accountCacheMock);
+                    bind(GitRepositoryManager.class).toInstance(repositoryManager);
                   }
                 })
             .getInstance(EventHandlerTask.class);
