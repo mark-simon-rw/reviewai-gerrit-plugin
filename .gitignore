@@ -1,4 +1,7 @@
 dependency-reduced-pom.xml
+node/
+node_modules/
+package-lock.json
 CLAUDE.local.md
 .claude/
 .codeiumignore
