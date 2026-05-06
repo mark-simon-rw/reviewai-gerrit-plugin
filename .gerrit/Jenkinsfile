@@ -48,7 +48,7 @@ pipeline {
             junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
             recordIssues(
               enabledForFailure: true,
-              aggregatingResults: true,
+              aggregatingResults: false,
               tools: [
                 checkStyle(pattern: '**/target/checkstyle-result.xml'),
                 pmdParser(pattern: '**/target/pmd.xml'),
