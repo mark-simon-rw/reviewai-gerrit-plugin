@@ -45,6 +45,7 @@ pipeline {
       post {
         always {
           script {
+            junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
             recordIssues(
               enabledForFailure: true,
               aggregatingResults: true,
