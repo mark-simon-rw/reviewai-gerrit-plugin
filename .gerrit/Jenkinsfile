@@ -2,7 +2,7 @@ def isGerritReview = false
 
 pipeline {
   agent {
-    label 'maratona'
+    label 'android-build'
   }
   stages {
     stage('Build') {
