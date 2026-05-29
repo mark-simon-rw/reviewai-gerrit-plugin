@@ -16,12 +16,13 @@
 
 package com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.prompt;
 
-import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
-import com.googlesource.gerrit.plugins.reviewai.localization.Localizer;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.ClientBase;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.messages.ClientMessageCleaner;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.api.gerrit.GerritComment;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.data.ChangeSetData;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.account.ReviewAiUser;
+import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
+import com.googlesource.gerrit.plugins.reviewai.localization.Localizer;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -54,8 +55,7 @@ public class AiComment extends ClientBase {
   }
 
   protected boolean isFromAssistant(GerritComment commentProperty) {
-    boolean fromAssistant =
-        commentProperty.getAuthor().getAccountId() == changeSetData.getAiAccountId();
+    boolean fromAssistant = ReviewAiUser.matches(commentProperty, changeSetData.getAiAccountId());
     log.debug("Checking if comment is from assistant: {}", fromAssistant);
     return fromAssistant;
   }

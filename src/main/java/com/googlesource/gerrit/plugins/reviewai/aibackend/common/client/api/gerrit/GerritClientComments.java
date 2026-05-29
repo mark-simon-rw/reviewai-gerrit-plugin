@@ -19,9 +19,11 @@ package com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.api.ger
 import com.google.common.annotations.VisibleForTesting;
 import com.google.gerrit.extensions.common.CommentInfo;
 import com.google.gerrit.server.account.AccountCache;
+import com.google.gerrit.server.data.AccountAttribute;
 import com.google.gerrit.server.events.CommentAddedEvent;
 import com.google.gerrit.server.util.ManualRequestContext;
 import com.google.inject.Inject;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.account.ReviewAiUser;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.langchain.memory.PluginChatMemoryStore;
 import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
 import com.googlesource.gerrit.plugins.reviewai.data.PluginDataHandlerProvider;
@@ -115,9 +117,11 @@ public class GerritClientComments extends GerritClientAccount {
 
   public boolean retrieveLastComments(GerritChange change) {
     CommentAddedEvent commentAddedEvent = (CommentAddedEvent) change.getEvent();
-    authorUsername = commentAddedEvent.author.get().username;
+    AccountAttribute author = commentAddedEvent.author.get();
+    authorUsername = author.username;
     log.debug("Found comments by '{}' on {}", authorUsername, change.getEventTimeStamp());
-    if (authorUsername.equals(config.getGerritUserName())) {
+    if (ReviewAiUser.matches(
+        author, config.getUserId(), config.getGerritUserName(), config.getGerritUserEmail())) {
       log.debug("These are the Bot's own comments, do not process them.");
       return false;
     }

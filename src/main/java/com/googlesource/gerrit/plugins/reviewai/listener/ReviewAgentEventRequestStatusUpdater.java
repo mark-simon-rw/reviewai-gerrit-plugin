@@ -17,10 +17,10 @@
 package com.googlesource.gerrit.plugins.reviewai.listener;
 
 import com.google.gerrit.server.events.CommentAddedEvent;
-import com.google.gerrit.server.data.AccountAttribute;
 import com.google.inject.Inject;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.api.gerrit.GerritChange;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.data.ChangeSetData;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.account.ReviewAiUser;
 import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
 import com.googlesource.gerrit.plugins.reviewai.data.PluginDataHandlerProvider;
 import com.googlesource.gerrit.plugins.reviewai.data.ReviewAgentRequestStatusStore;
@@ -52,25 +52,16 @@ class ReviewAgentEventRequestStatusUpdater {
     if (!(change.getPatchSetEvent() instanceof CommentAddedEvent)) {
       return PendingRequest.empty();
     }
-    if (isFromAi((CommentAddedEvent) change.getPatchSetEvent())) {
+    CommentAddedEvent event = (CommentAddedEvent) change.getPatchSetEvent();
+    if (ReviewAiUser.matches(
+        event.author == null ? null : event.author.get(),
+        config.getUserId(),
+        config.getGerritUserName(),
+        config.getGerritUserEmail())) {
       return PendingRequest.empty();
     }
     return new PendingRequest(
         statusStore, statusStore.getLatestPendingRequestId(), localizer, changeSetData);
-  }
-
-  private boolean isFromAi(CommentAddedEvent event) {
-    if (event.author == null || event.author.get() == null) {
-      return false;
-    }
-    AccountAttribute author = event.author.get();
-    if (config.getUserId() != null
-        && author.accountId != null
-        && author.accountId.equals(config.getUserId().get())) {
-      return true;
-    }
-    return config.getGerritUserName().equals(author.username)
-        || config.getGerritUserEmail().equals(author.email);
   }
 
   static class PendingRequest {

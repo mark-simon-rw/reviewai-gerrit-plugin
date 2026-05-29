@@ -23,11 +23,12 @@ import com.google.gerrit.extensions.common.ChangeInfo;
 import com.google.gerrit.extensions.common.ChangeMessageInfo;
 import com.google.gerrit.extensions.common.LabelInfo;
 import com.google.gerrit.server.util.ManualRequestContext;
-import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.api.gerrit.GerritComment;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.api.gerrit.GerritPatchSetDetail;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.api.gerrit.GerritPermittedVotingRange;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.data.ChangeSetData;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.account.ReviewAiUser;
+import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
 import lombok.extern.slf4j.Slf4j;
 
 import static java.util.Collections.emptyList;
@@ -80,7 +81,7 @@ public class GerritClientDetail {
       return null;
     }
     for (GerritPatchSetDetail.Permission permission : permissions) {
-      if (permission.getAccountId() == aiAccountId) {
+      if (ReviewAiUser.matches(permission.getAccountId(), aiAccountId)) {
         log.debug(
             "PatchSet voting range detected for AI user: {}",
             permission.getPermittedVotingRange());
@@ -100,7 +101,7 @@ public class GerritClientDetail {
     }
     for (GerritPatchSetDetail.Permission permission :
         gerritPatchSetDetail.getLabels().getCodeReview().getAll()) {
-      if (permission.getAccountId() == aiAccountId) {
+      if (ReviewAiUser.matches(permission.getAccountId(), aiAccountId)) {
         return permission.getValue();
       }
     }

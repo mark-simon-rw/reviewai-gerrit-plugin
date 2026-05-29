@@ -28,6 +28,7 @@ import com.google.gerrit.server.config.PluginConfig;
 import com.google.gerrit.server.config.PluginConfigFactory;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.account.ReviewAiUser;
 import com.googlesource.gerrit.plugins.reviewai.config.Configuration;
 import com.googlesource.gerrit.plugins.reviewai.utils.HashUtils;
 import java.util.Locale;
@@ -78,7 +79,7 @@ public class ReviewAiAvatarProvider implements AvatarProvider {
 
   @Override
   public String getUrl(IdentifiedUser forUser, int imageSize) {
-    if (isAiUser(forUser)) {
+    if (ReviewAiUser.matches(forUser, aiAccountId)) {
       return avatarUrl;
     }
     return getGravatarUrl(forUser, imageSize);
@@ -101,10 +102,6 @@ public class ReviewAiAvatarProvider implements AvatarProvider {
     }
     boolean ssl = canonicalWebUrl != null && canonicalWebUrl.startsWith("https://");
     return (ssl ? "https://" : "http://") + gravatarUrl;
-  }
-
-  private boolean isAiUser(IdentifiedUser forUser) {
-    return aiAccountId != null && aiAccountId.equals(forUser.getAccountId());
   }
 
   private String getGravatarUrl(IdentifiedUser forUser, int imageSize) {
