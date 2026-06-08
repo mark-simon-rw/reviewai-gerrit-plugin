@@ -23,6 +23,8 @@ import com.google.gerrit.extensions.restapi.BinaryResult;
 import com.google.gerrit.extensions.restapi.RestApiException;
 import com.google.gerrit.json.OutputFormat;
 import com.google.gson.Gson;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.commands.ClientCommandBase.BaseOptionSet;
+import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.commands.ClientCommandBase.CommandSet;
 import com.googlesource.gerrit.plugins.reviewai.data.PluginDataHandler;
 import com.googlesource.gerrit.plugins.reviewai.data.PluginDataHandlerProvider;
 import com.googlesource.gerrit.plugins.reviewai.data.ReviewAgentRequestStatusStore;
@@ -30,6 +32,7 @@ import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.data.Revi
 import com.googlesource.gerrit.plugins.reviewai.listener.EventHandlerTask;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.langchain.provider.openai.OpenAiLangChainReviewTestBase;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.langchain.provider.openai.OpenAiUriResourceLocator;
+import com.googlesource.gerrit.plugins.reviewai.localization.SystemMessageFormatter;
 import com.googlesource.gerrit.plugins.reviewai.utils.TextUtils;
 import org.junit.Assert;
 import org.junit.Before;
@@ -38,6 +41,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -248,6 +252,18 @@ public class CommandTest extends OpenAiLangChainReviewTestBase {
   }
 
   @Test
+  public void commandHelpRejectsUnknownCommandWithWarning() throws Exception {
+    setupCommandComment("/help /INVALID_COMMAND");
+
+    handleEventBasedOnType(EventHandlerTask.SupportedEvents.COMMENT_ADDED);
+
+    Assert.assertEquals(
+        SystemMessageFormatter.getLocalizedWarningMessage(
+            localizer, "message.command.help.command.unknown", "/INVALID_COMMAND"),
+        changeSetData.getReviewSystemMessage());
+  }
+
+  @Test
   public void commandReviewCommitMessageScopeIgnoresCommitMessageReviewConfig() throws Exception {
     when(globalConfig.getBoolean(Mockito.eq("aiReviewCommitMessages"), Mockito.anyBoolean()))
         .thenReturn(false);
@@ -395,11 +411,42 @@ public class CommandTest extends OpenAiLangChainReviewTestBase {
     handleEventBasedOnType(EventHandlerTask.SupportedEvents.COMMENT_ADDED);
 
     Assert.assertEquals(
-        String.format(
-            localizer.getText("message.command.option.value.invalid"),
+        SystemMessageFormatter.getLocalizedWarningMessage(
+            localizer,
+            "message.command.option.value.invalid",
             "SCOPE",
             "full",
             ReviewScope.reviewCommandOptionValues()),
+        changeSetData.getReviewSystemMessage());
+  }
+
+  @Test
+  public void commandReviewRejectsUnknownOptionWithWarning() throws Exception {
+    setupCommandComment("/review --INVALID_PARAM");
+
+    handleEventBasedOnType(EventHandlerTask.SupportedEvents.COMMENT_ADDED);
+
+    Assert.assertEquals(
+        SystemMessageFormatter.getLocalizedWarningMessage(
+            localizer,
+            "message.command.option.unknown",
+            CommandSet.REVIEW,
+            Map.of("INVALID_PARAM", "")),
+        changeSetData.getReviewSystemMessage());
+  }
+
+  @Test
+  public void commandReviewRejectsInvalidBaseOptionWithWarning() throws Exception {
+    setupCommandComment("/review --reset");
+
+    handleEventBasedOnType(EventHandlerTask.SupportedEvents.COMMENT_ADDED);
+
+    Assert.assertEquals(
+        SystemMessageFormatter.getLocalizedWarningMessage(
+            localizer,
+            "message.command.option.invalid",
+            CommandSet.REVIEW,
+            Map.of(BaseOptionSet.RESET, "")),
         changeSetData.getReviewSystemMessage());
   }
 
@@ -437,11 +484,42 @@ public class CommandTest extends OpenAiLangChainReviewTestBase {
 
     Assert.assertNull(changeHandler.getValue(KEY_DYNAMIC_CONFIG));
     Assert.assertEquals(
-        String.format(
-            localizer.getText("message.command.option.value.invalid"),
+        SystemMessageFormatter.getLocalizedWarningMessage(
+            localizer,
+            "message.command.option.value.invalid",
             "codeContextPolicy",
             invalidValue,
             List.of(CodeContextPolicies.values())),
+        changeSetData.getReviewSystemMessage());
+  }
+
+  @Test
+  public void commandConfigureRejectsUnknownSettingWithWarning() throws Exception {
+    setupCommandComment("/configure --unknownSetting=value");
+    enableMessageDebugging();
+    PluginDataHandler changeHandler = getChangeDataHandler();
+
+    handleEventBasedOnType(EventHandlerTask.SupportedEvents.COMMENT_ADDED);
+
+    Assert.assertNull(changeHandler.getValue(KEY_DYNAMIC_CONFIG));
+    Assert.assertEquals(
+        SystemMessageFormatter.getLocalizedWarningMessage(
+            localizer, "message.command.option.config.unknown", "unknownSetting"),
+        changeSetData.getReviewSystemMessage());
+  }
+
+  @Test
+  public void commandConfigureRejectsMalformedListWithWarning() throws Exception {
+    setupCommandComment("/configure --aiModels=not-an-array");
+    enableMessageDebugging();
+    PluginDataHandler changeHandler = getChangeDataHandler();
+
+    handleEventBasedOnType(EventHandlerTask.SupportedEvents.COMMENT_ADDED);
+
+    Assert.assertNull(changeHandler.getValue(KEY_DYNAMIC_CONFIG));
+    Assert.assertEquals(
+        SystemMessageFormatter.getLocalizedWarningMessage(
+            localizer, "message.command.option.config.array.malformed", "aiModels"),
         changeSetData.getReviewSystemMessage());
   }
 
@@ -686,10 +764,26 @@ public class CommandTest extends OpenAiLangChainReviewTestBase {
 
     handleEventBasedOnType(EventHandlerTask.SupportedEvents.COMMENT_ADDED);
 
-    Assert.assertTrue(
-        changeSetData
-            .getReviewSystemMessage()
-            .contains(String.format("Invalid option for command `%s`", "SHOW")));
+    Map<BaseOptionSet, String> options = new HashMap<>();
+    options.put(BaseOptionSet.CONFIG, "");
+    options.put(BaseOptionSet.SCOPE, ReviewScope.FULL.getCommandOptionValue());
+    Assert.assertEquals(
+        SystemMessageFormatter.getLocalizedWarningMessage(
+            localizer, "message.command.option.invalid", CommandSet.SHOW, options),
+        changeSetData.getReviewSystemMessage());
+  }
+
+  @Test
+  public void commandShowRejectsMissingRequiredOptionWithWarning() throws Exception {
+    setupCommandComment("/show");
+    enableMessageDebugging();
+
+    handleEventBasedOnType(EventHandlerTask.SupportedEvents.COMMENT_ADDED);
+
+    Assert.assertEquals(
+        SystemMessageFormatter.getLocalizedWarningMessage(
+            localizer, "message.command.option.required", CommandSet.SHOW),
+        changeSetData.getReviewSystemMessage());
   }
 
   @Test

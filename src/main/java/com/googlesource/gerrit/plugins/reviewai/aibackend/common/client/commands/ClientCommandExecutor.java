@@ -109,7 +109,8 @@ public class ClientCommandExecutor extends ClientCommandBase {
     CommandSet requestedCommand = parseHelpTarget(nextString);
     if (requestedCommand == null && !nextString.isEmpty()) {
       changeSetData.setReviewSystemMessage(
-          String.format(localizer.getText("message.command.help.command.unknown"), nextString));
+          SystemMessageFormatter.getLocalizedWarningMessage(
+              localizer, "message.command.help.command.unknown", nextString));
       return;
     }
     if (requestedCommand != null) {

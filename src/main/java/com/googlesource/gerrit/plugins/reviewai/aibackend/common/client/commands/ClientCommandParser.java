@@ -22,6 +22,7 @@ import com.googlesource.gerrit.plugins.reviewai.data.PluginDataHandlerProvider;
 import com.googlesource.gerrit.plugins.reviewai.interfaces.aibackend.common.client.code.context.ICodeContextPolicy;
 import com.googlesource.gerrit.plugins.reviewai.interfaces.aibackend.common.client.commands.IPatchSetProvider;
 import com.googlesource.gerrit.plugins.reviewai.localization.Localizer;
+import com.googlesource.gerrit.plugins.reviewai.localization.SystemMessageFormatter;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.client.api.gerrit.GerritChange;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.data.ChangeSetData;
 import com.googlesource.gerrit.plugins.reviewai.aibackend.common.model.data.ReviewScope;
@@ -198,14 +199,16 @@ public class ClientCommandParser extends ClientCommandBase {
       if (BASE_OPTIONS_REQUIRED.contains(command) && dynamicOptions.isEmpty()) {
         log.debug("Option(s) required for command `{}`", command);
         changeSetData.setReviewSystemMessage(
-            String.format(localizer.getText("message.command.option.required"), command));
+            SystemMessageFormatter.getLocalizedWarningMessage(
+                localizer, "message.command.option.required", command));
         return true;
       }
     } else if (commandOptions == null
         || !(new HashSet<>(commandOptions).containsAll(baseOptions.keySet()))) {
       log.debug("Invalid option for command `{}`: {}", command, baseOptions);
       changeSetData.setReviewSystemMessage(
-          String.format(localizer.getText("message.command.option.invalid"), command, baseOptions));
+          SystemMessageFormatter.getLocalizedWarningMessage(
+              localizer, "message.command.option.invalid", command, baseOptions));
       return true;
     }
     if (showScopeOptionMismatch(command)) {
@@ -218,8 +221,8 @@ public class ClientCommandParser extends ClientCommandBase {
       if (commandOptions == null || !commandOptions.contains(BaseOptionSet.CONFIGURATION_OPTION)) {
         log.debug("Unknown option(s) for command `{}`: {}", command, dynamicOptions);
         changeSetData.setReviewSystemMessage(
-            String.format(
-                localizer.getText("message.command.option.unknown"), command, dynamicOptions));
+            SystemMessageFormatter.getLocalizedWarningMessage(
+                localizer, "message.command.option.unknown", command, dynamicOptions));
         return true;
       }
       return configurationOptionsMismatch();
@@ -236,7 +239,8 @@ public class ClientCommandParser extends ClientCommandBase {
       return false;
     }
     changeSetData.setReviewSystemMessage(
-        String.format(localizer.getText("message.command.option.invalid"), command, baseOptions));
+        SystemMessageFormatter.getLocalizedWarningMessage(
+            localizer, "message.command.option.invalid", command, baseOptions));
     return true;
   }
 
@@ -245,8 +249,9 @@ public class ClientCommandParser extends ClientCommandBase {
       List<String> validValues = getValidBaseOptionValues(command, baseOption.getKey());
       if (validValues != null && !validValues.contains(baseOption.getValue())) {
         changeSetData.setReviewSystemMessage(
-            String.format(
-                localizer.getText("message.command.option.value.invalid"),
+            SystemMessageFormatter.getLocalizedWarningMessage(
+                localizer,
+                "message.command.option.value.invalid",
                 baseOption.getKey(),
                 baseOption.getValue(),
                 validValues));
@@ -277,14 +282,16 @@ public class ClientCommandParser extends ClientCommandBase {
       if (!config.isDefinedKey(key)) {
         log.debug("Unknown configuration option: {}", key);
         changeSetData.setReviewSystemMessage(
-            String.format(localizer.getText("message.command.option.config.unknown"), key));
+            SystemMessageFormatter.getLocalizedWarningMessage(
+                localizer, "message.command.option.config.unknown", key));
         return true;
       }
       Optional<List<String>> validValues = config.getValidDynamicConfigValues(key);
       if (validValues.isPresent() && !validValues.get().contains(dynamicEntry.getValue())) {
         changeSetData.setReviewSystemMessage(
-            String.format(
-                localizer.getText("message.command.option.value.invalid"),
+            SystemMessageFormatter.getLocalizedWarningMessage(
+                localizer,
+                "message.command.option.value.invalid",
                 key,
                 dynamicEntry.getValue(),
                 validValues.get()));
@@ -300,7 +307,8 @@ public class ClientCommandParser extends ClientCommandBase {
           && jsonArrayToList(dynamicEntry.getValue()).isEmpty()) {
         log.debug("Value of `{}` must be formatted as a JSON array", key);
         changeSetData.setReviewSystemMessage(
-            String.format(localizer.getText("message.command.option.config.array.malformed"), key));
+            SystemMessageFormatter.getLocalizedWarningMessage(
+                localizer, "message.command.option.config.array.malformed", key));
         return true;
       }
     }
